@@ -1,0 +1,485 @@
+---
+description: Performance optimization techniques for Next.js apps including lazy loading, caching, and bundle optimization.
+globs: 
+alwaysApply: true
+---
+# Performance Optimization
+
+## Core Web Vitals
+
+### Metrics to Monitor
+1. **LCP (Largest Contentful Paint)**: < 2.5s
+2. **FID (First Input Delay)**: < 100ms
+3. **CLS (Cumulative Layout Shift)**: < 0.1
+4. **INP (Interaction to Next Paint)**: < 200ms (replacing FID)
+
+### Measurement Tools
+```bash
+# Install web-vitals
+pnpm add web-vitals
+
+# Next.js built-in analytics
+pnpm add @vercel/analytics
+```
+
+### Implementation
+```typescript
+// app/layout.tsx
+import { Analytics } from '@vercel/analytics/react';
+import { SpeedInsights } from '@vercel/speed-insights/next';
+
+export default function RootLayout({ children }) {
+  return (
+    <html>
+      <body>
+        {children}
+        <Analytics />
+        <SpeedInsights />
+      </body>
+    </html>
+  );
+}
+
+// utils/web-vitals.ts
+import { onCLS, onFID, onLCP, onINP, onTTFB } from 'web-vitals';
+
+export function reportWebVitals() {
+  onCLS(console.log);
+  onFID(console.log);
+  onLCP(console.log);
+  onINP(console.log);
+  onTTFB(console.log);
+}
+```
+
+## Image Optimization
+
+### Next.js Image Component
+```tsx
+import Image from 'next/image';
+
+// ✅ Good: Optimized image loading
+<Image
+  src="/hero.jpg"
+  alt="Hero image"
+  width={1200}
+  height={600}
+  priority // For above-the-fold images
+  placeholder="blur"
+  blurDataURL={blurDataUrl}
+  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+/>
+
+// ❌ Bad: Unoptimized img tag
+<img src="/hero.jpg" alt="Hero image" />
+```
+
+### Image Formats and Sizing
+```tsx
+// next.config.mjs
+export default {
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 3840],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    minimumCacheTTL: 60 * 60 * 24 * 365, // 1 year
+  },
+};
+```
+
+### Lazy Loading Patterns
+```tsx
+// components/lazy-image.tsx
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import Image from 'next/image';
+
+export function LazyImage({ src, alt, ...props }) {
+  const [isIntersecting, setIsIntersecting] = useState(false);
+  const imgRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsIntersecting(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.1, rootMargin: '50px' }
+    );
+
+    if (imgRef.current) {
+      observer.observe(imgRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={imgRef}>
+      {isIntersecting && (
+        <Image src={src} alt={alt} {...props} />
+      )}
+    </div>
+  );
+}
+```
+
+## Bundle Size Optimization
+
+### Bundle Analysis
+```bash
+# Install bundle analyzer
+pnpm add -D @next/bundle-analyzer
+
+# Configure in next.config.mjs
+import bundleAnalyzer from '@next/bundle-analyzer';
+
+const withBundleAnalyzer = bundleAnalyzer({
+  enabled: process.env.ANALYZE === 'true',
+});
+
+export default withBundleAnalyzer({
+  // your config
+});
+
+# Run analysis
+ANALYZE=true pnpm build
+```
+
+### Code Splitting Strategies
+
+#### Dynamic Imports
+```tsx
+// ✅ Good: Dynamic import for heavy components
+import dynamic from 'next/dynamic';
+
+const HeavyChart = dynamic(() => import('@/components/heavy-chart'), {
+  loading: () => <div>Loading chart...</div>,
+  ssr: false, // Disable SSR for client-only components
+});
+
+// ✅ Good: Conditional loading
+const DynamicModal = dynamic(() => import('@/components/modal'));
+
+export function Page() {
+  const [showModal, setShowModal] = useState(false);
+  
+  return (
+    <>
+      <button onClick={() => setShowModal(true)}>Open Modal</button>
+      {showModal && <DynamicModal />}
+    </>
+  );
+}
+```
+
+#### Route-Based Splitting
+```tsx
+// ✅ Good: Parallel routes for code splitting
+app/
+├── (marketing)/
+│   ├── layout.tsx    # Marketing-specific layout
+│   └── page.tsx      # Lighter bundle
+└── (app)/
+    ├── layout.tsx    # App-specific layout with heavy deps
+    └── dashboard/    # Heavier bundle
+```
+
+### Tree Shaking
+```typescript
+// ✅ Good: Named imports for tree shaking
+import { debounce } from 'lodash-es';
+
+// ❌ Bad: Imports entire library
+import _ from 'lodash';
+const debounce = _.debounce;
+
+// ✅ Good: Modular imports
+import debounce from 'lodash/debounce';
+```
+
+### Bundle Size Budgets
+```json
+// package.json
+{
+  "bundlesize": [
+    {
+      "path": ".next/static/chunks/main-*.js",
+      "maxSize": "150 kB"
+    },
+    {
+      "path": ".next/static/chunks/pages/**/*.js",
+      "maxSize": "100 kB"
+    }
+  ]
+}
+```
+
+## Caching Strategies
+
+### Next.js Caching
+```typescript
+// app/api/data/route.ts
+export async function GET() {
+  const data = await fetchData();
+  
+  return NextResponse.json(data, {
+    headers: {
+      'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+    },
+  });
+}
+
+// Static generation with revalidation
+export const revalidate = 3600; // Revalidate every hour
+
+// Dynamic rendering with cache
+export const dynamic = 'force-static';
+export const dynamicParams = true;
+```
+
+### React Query Caching
+```typescript
+// hooks/use-products.ts
+export function useProducts() {
+  return useQuery({
+    queryKey: ['products'],
+    queryFn: fetchProducts,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    cacheTime: 10 * 60 * 1000, // 10 minutes
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: 'always',
+  });
+}
+
+// Prefetching
+export async function prefetchProducts(queryClient: QueryClient) {
+  await queryClient.prefetchQuery({
+    queryKey: ['products'],
+    queryFn: fetchProducts,
+    staleTime: 10 * 60 * 1000,
+  });
+}
+```
+
+### Service Worker Caching
+```javascript
+// public/sw.js
+const CACHE_NAME = 'v1';
+const urlsToCache = [
+  '/',
+  '/styles/main.css',
+  '/scripts/main.js',
+];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(urlsToCache))
+  );
+});
+
+self.addEventListener('fetch', (event) => {
+  event.respondWith(
+    caches.match(event.request)
+      .then((response) => response || fetch(event.request))
+  );
+});
+```
+
+## Font Optimization
+
+### Next.js Font Optimization
+```tsx
+// app/layout.tsx
+import { Inter, Roboto_Mono } from 'next/font/google';
+
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-inter',
+});
+
+const robotoMono = Roboto_Mono({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-roboto-mono',
+});
+
+export default function RootLayout({ children }) {
+  return (
+    <html className={`${inter.variable} ${robotoMono.variable}`}>
+      <body>{children}</body>
+    </html>
+  );
+}
+```
+
+### Font Loading Strategy
+```css
+/* globals.css */
+@font-face {
+  font-family: 'CustomFont';
+  src: url('/fonts/custom.woff2') format('woff2');
+  font-display: swap; /* Prevent FOIT */
+  font-weight: 400;
+  font-style: normal;
+}
+
+/* Preload critical fonts */
+<link
+  rel="preload"
+  href="/fonts/custom.woff2"
+  as="font"
+  type="font/woff2"
+  crossOrigin="anonymous"
+/>
+```
+
+## JavaScript Optimization
+
+### Minimize Main Thread Work
+```typescript
+// ✅ Good: Debounce expensive operations
+import { debounce } from 'lodash-es';
+
+const handleSearch = debounce((query: string) => {
+  // Expensive search operation
+}, 300);
+
+// ✅ Good: Use Web Workers for heavy computation
+const worker = new Worker('/workers/heavy-computation.js');
+worker.postMessage({ cmd: 'process', data: largeDataset });
+worker.onmessage = (e) => {
+  console.log('Processed:', e.data);
+};
+```
+
+### Optimize React Rendering
+```tsx
+// ✅ Good: Memoize expensive computations
+import { useMemo, memo } from 'react';
+
+const ExpensiveComponent = memo(({ data }) => {
+  const processedData = useMemo(() => {
+    return heavyProcessing(data);
+  }, [data]);
+
+  return <div>{processedData}</div>;
+});
+
+// ✅ Good: Use React.lazy for code splitting
+const HeavyComponent = lazy(() => import('./HeavyComponent'));
+
+// ✅ Good: Virtualize long lists
+import { FixedSizeList } from 'react-window';
+
+function VirtualList({ items }) {
+  return (
+    <FixedSizeList
+      height={600}
+      itemCount={items.length}
+      itemSize={50}
+      width="100%"
+    >
+      {({ index, style }) => (
+        <div style={style}>{items[index]}</div>
+      )}
+    </FixedSizeList>
+  );
+}
+```
+
+## Performance Monitoring
+
+### Real User Monitoring (RUM)
+```typescript
+// utils/rum.ts
+export function initRUM() {
+  // Send metrics to analytics
+  new PerformanceObserver((list) => {
+    for (const entry of list.getEntries()) {
+      // Send to analytics service
+      analytics.track('performance', {
+        name: entry.name,
+        value: entry.startTime,
+        metric: entry.entryType,
+      });
+    }
+  }).observe({ entryTypes: ['navigation', 'resource', 'paint'] });
+}
+```
+
+### Custom Performance Marks
+```typescript
+// utils/performance.ts
+export function measureOperation(name: string, fn: () => void) {
+  performance.mark(`${name}-start`);
+  fn();
+  performance.mark(`${name}-end`);
+  performance.measure(name, `${name}-start`, `${name}-end`);
+  
+  const measure = performance.getEntriesByName(name)[0];
+  console.log(`${name} took ${measure.duration}ms`);
+}
+
+// Usage
+measureOperation('data-processing', () => {
+  processLargeDataset();
+});
+```
+
+## Performance Budgets
+
+### Lighthouse CI Configuration
+```json
+// lighthouserc.json
+{
+  "ci": {
+    "assert": {
+      "assertions": {
+        "categories:performance": ["error", { "minScore": 0.9 }],
+        "categories:accessibility": ["error", { "minScore": 0.9 }],
+        "categories:seo": ["error", { "minScore": 0.9 }],
+        "first-contentful-paint": ["error", { "maxNumericValue": 2000 }],
+        "largest-contentful-paint": ["error", { "maxNumericValue": 2500 }],
+        "cumulative-layout-shift": ["error", { "maxNumericValue": 0.1 }],
+        "total-blocking-time": ["error", { "maxNumericValue": 300 }]
+      }
+    }
+  }
+}
+```
+
+### Performance Checklist
+- [ ] Images optimized and lazy loaded
+- [ ] Fonts optimized with font-display: swap
+- [ ] JavaScript bundles < 200KB per route
+- [ ] Critical CSS inlined
+- [ ] Third-party scripts loaded asynchronously
+- [ ] Service worker implemented for offline support
+- [ ] Gzip/Brotli compression enabled
+- [ ] HTTP/2 or HTTP/3 enabled
+- [ ] CDN configured for static assets
+- [ ] Database queries optimized with indexes
+
+## Best Practices
+
+### Do's
+- ✅ Measure performance in production environment
+- ✅ Set performance budgets and monitor them
+- ✅ Use native lazy loading for images and iframes
+- ✅ Implement progressive enhancement
+- ✅ Optimize for mobile-first
+- ✅ Use resource hints (preconnect, prefetch, preload)
+
+### Don'ts
+- ❌ Don't optimize prematurely without metrics
+- ❌ Avoid render-blocking resources
+- ❌ Don't load unnecessary polyfills
+- ❌ Avoid large DOM trees (> 1500 nodes)
+- ❌ Don't use synchronous XMLHttpRequest
+- ❌ Avoid excessive JavaScript execution time

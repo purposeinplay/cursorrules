@@ -1,0 +1,679 @@
+---
+description: State management patterns using Zustand, React Query, and React Hook Form for different use cases.
+globs: 
+alwaysApply: true
+---
+# State Management
+
+## State Management Strategy
+
+We use a layered approach to state management based on the scope and nature of the data:
+
+1. **Global State**: Redux Toolkit for application-wide state
+2. **Server State**: React Query for server data and caching
+3. **Local State**: `useState` and `useReducer` for component-specific state
+4. **Feature State**: Context API for feature-specific shared state
+
+## Redux Toolkit for Global State
+
+### Setup and Configuration
+
+```typescript
+// store/index.ts
+import { configureStore } from '@reduxjs/toolkit';
+import { authSlice } from './slices/auth-slice';
+import { uiSlice } from './slices/ui-slice';
+import { userPreferencesSlice } from './slices/user-preferences-slice';
+
+export const store = configureStore({
+  reducer: {
+    auth: authSlice.reducer,
+    ui: uiSlice.reducer,
+    userPreferences: userPreferencesSlice.reducer,
+  },
+  middleware: (getDefaultMiddleware) =>
+    getDefaultMiddleware({
+      serializableCheck: {
+        ignoredActions: ['persist/PERSIST'],
+      },
+    }),
+});
+
+export type RootState = ReturnType<typeof store.getState>;
+export type AppDispatch = typeof store.dispatch;
+```
+
+### Creating Slices
+
+```typescript
+// store/slices/auth-slice.ts
+import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+
+interface AuthState {
+  user: User | null;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+  error: string | null;
+}
+
+const initialState: AuthState = {
+  user: null,
+  isAuthenticated: false,
+  isLoading: false,
+  error: null,
+};
+
+export const authSlice = createSlice({
+  name: 'auth',
+  initialState,
+  reducers: {
+    loginStart: (state) => {
+      state.isLoading = true;
+      state.error = null;
+    },
+    loginSuccess: (state, action: PayloadAction<User>) => {
+      state.user = action.payload;
+      state.isAuthenticated = true;
+      state.isLoading = false;
+      state.error = null;
+    },
+    loginFailure: (state, action: PayloadAction<string>) => {
+      state.isLoading = false;
+      state.error = action.payload;
+      state.isAuthenticated = false;
+    },
+    logout: (state) => {
+      state.user = null;
+      state.isAuthenticated = false;
+    },
+  },
+});
+
+export const { loginStart, loginSuccess, loginFailure, logout } = authSlice.actions;
+```
+
+### Typed Hooks
+
+```typescript
+// hooks/redux.ts
+import { useDispatch, useSelector, TypedUseSelectorHook } from 'react-redux';
+import type { RootState, AppDispatch } from '@/store';
+
+export const useAppDispatch = () => useDispatch<AppDispatch>();
+export const useAppSelector: TypedUseSelectorHook<RootState> = useSelector;
+```
+
+### Usage in Components
+
+```tsx
+// components/login-form.tsx
+import { useAppDispatch, useAppSelector } from '@/hooks/redux';
+import { loginStart, loginSuccess, loginFailure } from '@/store/slices/auth-slice';
+
+export function LoginForm() {
+  const dispatch = useAppDispatch();
+  const { isLoading, error } = useAppSelector((state) => state.auth);
+
+  const handleLogin = async (credentials: LoginCredentials) => {
+    dispatch(loginStart());
+    try {
+      const user = await authService.login(credentials);
+      dispatch(loginSuccess(user));
+    } catch (error) {
+      dispatch(loginFailure(error.message));
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit(handleLogin)}>
+      {/* Form fields */}
+      {error && <div className="text-destructive">{error}</div>}
+      <button disabled={isLoading} type="submit">
+        {isLoading ? 'Signing in...' : 'Sign In'}
+      </button>
+    </form>
+  );
+}
+```
+
+## React Query for Server State
+
+For comprehensive React Query patterns and setup, see @data-fetching.mdc.
+
+### Setup and Configuration
+
+```typescript
+// providers/query-provider.tsx
+'use client';
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { useState } from 'react';
+
+export function QueryProvider({ children }: { children: React.ReactNode }) {
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            staleTime: 60 * 1000, // 1 minute
+            retry: (failureCount, error) => {
+              // Don't retry on 4xx errors
+              if (error?.status >= 400 && error?.status < 500) {
+                return false;
+              }
+              return failureCount < 3;
+            },
+          },
+        },
+      })
+  );
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      {children}
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
+  );
+}
+```
+
+### Query Hooks
+
+```typescript
+// hooks/use-products.ts
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { productService } from '@/services/product-service';
+
+export function useProducts(filters?: ProductFilters) {
+  return useQuery({
+    queryKey: ['products', filters],
+    queryFn: () => productService.getProducts(filters),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+
+export function useProduct(id: string) {
+  return useQuery({
+    queryKey: ['products', id],
+    queryFn: () => productService.getProduct(id),
+    enabled: !!id,
+  });
+}
+
+export function useCreateProduct() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: productService.createProduct,
+    onSuccess: () => {
+      // Invalidate and refetch products list
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
+  });
+}
+
+export function useUpdateProduct() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateProductData }) =>
+      productService.updateProduct(id, data),
+    onSuccess: (updatedProduct) => {
+      // Update the specific product in cache
+      queryClient.setQueryData(['products', updatedProduct.id], updatedProduct);
+      // Invalidate products list
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
+  });
+}
+```
+
+### Usage in Components
+
+```tsx
+// components/products/product-list.tsx
+import { useProducts, useCreateProduct } from '@/hooks/use-products';
+
+export function ProductList() {
+  const { data: products, isLoading, error } = useProducts();
+  const createProduct = useCreateProduct();
+
+  const handleCreateProduct = async (productData: CreateProductData) => {
+    try {
+      await createProduct.mutateAsync(productData);
+      // Success handled by onSuccess callback
+    } catch (error) {
+      // Handle error
+      console.error('Failed to create product:', error);
+    }
+  };
+
+  if (isLoading) return <div>Loading products...</div>;
+  if (error) return <div>Error loading products: {error.message}</div>;
+
+  return (
+    <div>
+      {products?.map((product) => (
+        <ProductCard key={product.id} product={product} />
+      ))}
+    </div>
+  );
+}
+```
+
+## Local State with useState and useReducer
+
+### Simple State with useState
+
+```tsx
+// components/forms/contact-form.tsx
+import { useState } from 'react';
+
+interface FormData {
+  name: string;
+  email: string;
+  message: string;
+}
+
+export function ContactForm() {
+  const [formData, setFormData] = useState<FormData>({
+    name: '',
+    email: '',
+    message: '',
+  });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errors, setErrors] = useState<Partial<FormData>>({});
+
+  const updateField = (field: keyof FormData, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    // Clear error when user starts typing
+    if (errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: undefined }));
+    }
+  };
+
+  return (
+    <form>
+      <input
+        value={formData.name}
+        onChange={(e) => updateField('name', e.target.value)}
+        placeholder="Name"
+      />
+      {/* Other form fields */}
+    </form>
+  );
+}
+```
+
+### Complex State with useReducer
+
+```tsx
+// components/shopping-cart/cart-provider.tsx
+import { useReducer, createContext, useContext } from 'react';
+
+interface CartItem {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+}
+
+interface CartState {
+  items: CartItem[];
+  total: number;
+}
+
+type CartAction =
+  | { type: 'ADD_ITEM'; payload: CartItem }
+  | { type: 'REMOVE_ITEM'; payload: string }
+  | { type: 'UPDATE_QUANTITY'; payload: { id: string; quantity: number } }
+  | { type: 'CLEAR_CART' };
+
+const cartReducer = (state: CartState, action: CartAction): CartState => {
+  switch (action.type) {
+    case 'ADD_ITEM':
+      const existingItem = state.items.find((item) => item.id === action.payload.id);
+      if (existingItem) {
+        return {
+          ...state,
+          items: state.items.map((item) =>
+            item.id === action.payload.id
+              ? { ...item, quantity: item.quantity + action.payload.quantity }
+              : item
+          ),
+        };
+      }
+      return {
+        ...state,
+        items: [...state.items, action.payload],
+      };
+    case 'REMOVE_ITEM':
+      return {
+        ...state,
+        items: state.items.filter((item) => item.id !== action.payload),
+      };
+    case 'UPDATE_QUANTITY':
+      return {
+        ...state,
+        items: state.items.map((item) =>
+          item.id === action.payload.id
+            ? { ...item, quantity: action.payload.quantity }
+            : item
+        ),
+      };
+    case 'CLEAR_CART':
+      return { items: [], total: 0 };
+    default:
+      return state;
+  }
+};
+
+const CartContext = createContext<{
+  state: CartState;
+  dispatch: React.Dispatch<CartAction>;
+} | undefined>(undefined);
+
+export function CartProvider({ children }: { children: React.ReactNode }) {
+  const [state, dispatch] = useReducer(cartReducer, { items: [], total: 0 });
+
+  return (
+    <CartContext.Provider value={{ state, dispatch }}>
+      {children}
+    </CartContext.Provider>
+  );
+}
+
+export function useCart() {
+  const context = useContext(CartContext);
+  if (context === undefined) {
+    throw new Error('useCart must be used within a CartProvider');
+  }
+  return context;
+}
+```
+
+## Context API for Feature State
+
+### Theme Context Example
+
+```tsx
+// contexts/theme-context.tsx
+'use client';
+
+import { createContext, useContext, useState, useEffect } from 'react';
+
+type Theme = 'light' | 'dark' | 'system';
+
+interface ThemeContextType {
+  theme: Theme;
+  setTheme: (theme: Theme) => void;
+  resolvedTheme: 'light' | 'dark';
+}
+
+const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const [theme, setTheme] = useState<Theme>('system');
+  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
+
+  useEffect(() => {
+    // Load theme from localStorage
+    const savedTheme = localStorage.getItem('theme') as Theme;
+    if (savedTheme) {
+      setTheme(savedTheme);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Apply theme to document
+    const root = window.document.documentElement;
+    root.classList.remove('light', 'dark');
+
+    if (theme === 'system') {
+      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches
+        ? 'dark'
+        : 'light';
+      root.classList.add(systemTheme);
+      setResolvedTheme(systemTheme);
+    } else {
+      root.classList.add(theme);
+      setResolvedTheme(theme);
+    }
+
+    // Save to localStorage
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+
+  return (
+    <ThemeContext.Provider value={{ theme, setTheme, resolvedTheme }}>
+      {children}
+    </ThemeContext.Provider>
+  );
+}
+
+export function useTheme() {
+  const context = useContext(ThemeContext);
+  if (context === undefined) {
+    throw new Error('useTheme must be used within a ThemeProvider');
+  }
+  return context;
+}
+```
+
+### Search Context with useReducer
+
+```tsx
+// contexts/search-context.tsx
+import { useReducer, createContext, useContext } from 'react';
+
+interface SearchState {
+  query: string;
+  filters: Record<string, any>;
+  results: any[];
+  isLoading: boolean;
+  hasSearched: boolean;
+}
+
+type SearchAction =
+  | { type: 'SET_QUERY'; payload: string }
+  | { type: 'SET_FILTERS'; payload: Record<string, any> }
+  | { type: 'SEARCH_START' }
+  | { type: 'SEARCH_SUCCESS'; payload: any[] }
+  | { type: 'SEARCH_ERROR' }
+  | { type: 'CLEAR_SEARCH' };
+
+const searchReducer = (state: SearchState, action: SearchAction): SearchState => {
+  switch (action.type) {
+    case 'SET_QUERY':
+      return { ...state, query: action.payload };
+    case 'SET_FILTERS':
+      return { ...state, filters: { ...state.filters, ...action.payload } };
+    case 'SEARCH_START':
+      return { ...state, isLoading: true };
+    case 'SEARCH_SUCCESS':
+      return {
+        ...state,
+        results: action.payload,
+        isLoading: false,
+        hasSearched: true,
+      };
+    case 'SEARCH_ERROR':
+      return { ...state, isLoading: false, hasSearched: true };
+    case 'CLEAR_SEARCH':
+      return {
+        ...state,
+        query: '',
+        results: [],
+        hasSearched: false,
+      };
+    default:
+      return state;
+  }
+};
+
+const SearchContext = createContext<{
+  state: SearchState;
+  dispatch: React.Dispatch<SearchAction>;
+} | undefined>(undefined);
+
+export function SearchProvider({ children }: { children: React.ReactNode }) {
+  const [state, dispatch] = useReducer(searchReducer, {
+    query: '',
+    filters: {},
+    results: [],
+    isLoading: false,
+    hasSearched: false,
+  });
+
+  return (
+    <SearchContext.Provider value={{ state, dispatch }}>
+      {children}
+    </SearchContext.Provider>
+  );
+}
+
+export function useSearch() {
+  const context = useContext(SearchContext);
+  if (context === undefined) {
+    throw new Error('useSearch must be used within a SearchProvider');
+  }
+  return context;
+}
+```
+
+## Provider Composition in App Layout
+
+### Root Layout with Provider Composition
+
+```tsx
+// app/layout.tsx
+import { ReduxProvider } from '@/providers/redux-provider';
+import { QueryProvider } from '@/providers/query-provider';
+import { ThemeProvider } from '@/contexts/theme-context';
+import { AuthProvider } from '@/contexts/auth-context';
+
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <html lang="en">
+      <body>
+        <ReduxProvider>
+          <QueryProvider>
+            <ThemeProvider>
+              <AuthProvider>
+                {children}
+              </AuthProvider>
+            </ThemeProvider>
+          </QueryProvider>
+        </ReduxProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+### Feature-Specific Provider Composition
+
+```tsx
+// app/(app)/search/layout.tsx
+import { SearchProvider } from '@/contexts/search-context';
+import { FilterProvider } from '@/contexts/filter-context';
+
+export default function SearchLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <SearchProvider>
+      <FilterProvider>
+        {children}
+      </FilterProvider>
+    </SearchProvider>
+  );
+}
+```
+
+### Composed Provider Component
+
+```tsx
+// providers/app-providers.tsx
+'use client';
+
+import { ReduxProvider } from './redux-provider';
+import { QueryProvider } from './query-provider';
+import { ThemeProvider } from '@/contexts/theme-context';
+import { AuthProvider } from '@/contexts/auth-context';
+
+interface AppProvidersProps {
+  children: React.ReactNode;
+}
+
+export function AppProviders({ children }: AppProvidersProps) {
+  return (
+    <ReduxProvider>
+      <QueryProvider>
+        <ThemeProvider>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </ThemeProvider>
+      </QueryProvider>
+    </ReduxProvider>
+  );
+}
+
+// Usage in layout
+// <AppProviders>{children}</AppProviders>
+```
+
+## Best Practices
+
+### State Placement Guidelines
+
+| State Type | Use Case | Tool |
+|---|---|---|
+| **Global App State** | Authentication, user preferences, app-wide UI state | Redux Toolkit |
+| **Server Data** | API responses, caching, background updates | React Query |
+| **Component State** | Form inputs, toggles, local UI state | useState |
+| **Complex Component State** | Multi-step forms, complex interactions | useReducer |
+| **Feature State** | Search filters, shopping cart, feature-specific data | Context API |
+
+### Performance Considerations
+
+#### Redux Toolkit
+- ✅ Use RTK Query for server state instead of Redux
+- ✅ Keep global state minimal and normalized
+- ✅ Use selectors to prevent unnecessary re-renders
+- ✅ Leverage Redux DevTools for debugging
+
+#### React Query
+- ✅ Set appropriate stale times for different data types
+- ✅ Use query invalidation strategically
+- ✅ Implement optimistic updates for better UX
+- ✅ Handle loading and error states consistently
+
+#### Context API
+- ✅ Split contexts by concern to prevent unnecessary re-renders
+- ✅ Use multiple small contexts instead of one large context
+- ✅ Memoize context values when they contain objects
+- ✅ Place providers as close to consumers as possible
+
+### Error Handling
+
+For comprehensive error handling patterns including error boundaries, see @errors.mdc.
+
+```tsx
+// Query error handling
+const { data, error, isError } = useProducts();
+
+if (isError) {
+  return <ErrorMessage error={error} retry={() => refetch()} />;
+}
+```
+
+This comprehensive state management strategy ensures scalable, maintainable, and performant state handling across your entire application.

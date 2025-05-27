@@ -1,0 +1,140 @@
+---
+description: Build and test commands for development, testing, and production.
+globs: 
+alwaysApply: true
+---
+# Build & Test Commands
+
+## Development
+```sh
+pnpm dev
+```
+Starts the Next.js development server with hot module replacement.
+
+## Build
+```sh
+pnpm build
+```
+Creates an optimized production build of your application.
+
+## Production Preview
+```sh
+pnpm start
+```
+Runs the production build locally for testing before deployment.
+
+## Linting & Formatting
+```sh
+# Run ESLint
+pnpm lint
+
+# Fix auto-fixable lint issues
+pnpm lint:fix
+
+# Check formatting with Prettier
+pnpm format:check
+
+# Fix formatting issues
+pnpm format
+```
+
+For detailed linting and formatting configuration, see @code-styles.mdc.
+
+## Type Checking
+```sh
+# Run TypeScript compiler checks
+pnpm type-check
+```
+
+## Testing
+```sh
+# Run all tests
+pnpm test
+
+# Run tests in watch mode
+pnpm test:watch
+
+# Run tests with coverage
+pnpm test:coverage
+
+# Run a single test file
+pnpm test __tests__/test-file.test.ts
+
+# Run E2E tests
+pnpm test:e2e
+```
+
+For comprehensive testing patterns and setup, see @testing.mdc.
+
+## Bundle Analysis
+```sh
+# Analyze bundle size
+ANALYZE=true pnpm build
+```
+
+For performance optimization strategies, see @performance-optimization.mdc.
+
+## Environment-Specific Builds
+```sh
+# Development build
+NODE_ENV=development pnpm build
+
+# Staging build
+NODE_ENV=staging pnpm build
+
+# Production build (default)
+NODE_ENV=production pnpm build
+```
+
+## CI/CD Scripts
+```sh
+# Run all checks (for CI)
+pnpm ci
+
+# This typically includes:
+# - pnpm install --frozen-lockfile
+# - pnpm lint
+# - pnpm type-check
+# - pnpm test
+# - pnpm build
+```
+
+## Monorepo Commands
+```sh
+# Build all packages
+pnpm -r build
+
+# Build specific workspace
+pnpm --filter web build
+pnpm --filter @repo/ui build
+
+# Run command in all workspaces
+pnpm -r test
+```
+
+For package management in monorepo, see @installing-packages.mdc.
+
+## Common Build Issues
+
+### Out of Memory
+```sh
+# Increase Node.js memory limit
+NODE_OPTIONS="--max-old-space-size=4096" pnpm build
+```
+
+### Clean Build
+```sh
+# Remove build artifacts
+rm -rf .next
+rm -rf node_modules/.cache
+
+# Fresh install and build
+pnpm install --force
+pnpm build
+```
+
+## Build Configuration
+
+For Next.js specific build configuration, check `next.config.mjs`.
+For TypeScript configuration, see `tsconfig.json`.
+For detailed project structure, see @project-structure.mdc.

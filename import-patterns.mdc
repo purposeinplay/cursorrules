@@ -1,0 +1,246 @@
+---
+description: Best practices for import statements including ordering, aliasing, and avoiding circular dependencies.
+globs: 
+alwaysApply: true
+---
+# Import Patterns
+
+## Path Aliases
+
+### Use `@/` for Absolute Imports
+Always use the `@/` prefix for imports from the project root:
+
+```tsx
+// ✅ Good - absolute import with @/ prefix
+import { Button } from '@/components/ui/button';
+import { fetchUser } from '@/utils/api/user';
+import { AuthProvider } from '@/providers/auth-provider';
+
+// ❌ Bad - relative imports from project root
+import { Button } from '../../../components/ui/button';
+import { fetchUser } from '../../utils/api/user';
+```
+
+### When to Use Relative vs Absolute Imports
+
+#### Use Relative Imports
+- **Within the same module/directory**
+- **For closely related files**
+- **When files are likely to move together**
+
+```tsx
+// Inside src/modules/products/components/product-card.tsx
+import ProductRating from './product-rating';
+import ProductImage from './product-image';
+import { formatPrice } from '../utils/format-price';
+```
+
+#### Use Absolute Imports (`@/`)
+- **Between different modules**
+- **For shared utilities and components**
+- **For anything in the project root directories**
+
+```tsx
+// From any file in the project
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/hooks/use-auth';
+import { fetchProducts } from '@/modules/products/api/product-service';
+import { cn } from '@/utils/cn';
+```
+
+## Import Organization
+
+### Import Order
+Organize imports in the following order with blank lines between groups:
+
+```tsx
+// 1. External libraries
+import React from 'react';
+import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+
+// 2. Internal absolute imports (@/)
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/hooks/use-auth';
+import { fetchUser } from '@/utils/api/user';
+
+// 3. Relative imports
+import ProductCard from './product-card';
+import { formatPrice } from '../utils/format-price';
+
+// 4. Type-only imports (if not mixed with regular imports)
+import type { User } from '@/types/user';
+import type { ProductCardProps } from './types';
+```
+
+### Group Related Imports
+Group imports by their purpose or domain:
+
+```tsx
+// UI Components
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card } from '@/components/ui/card';
+
+// Hooks
+import { useAuth } from '@/hooks/use-auth';
+import { useLocalStorage } from '@/hooks/use-local-storage';
+
+// API & Data
+import { fetchProducts } from '@/modules/products/api/product-service';
+import { createUser } from '@/utils/api/user';
+
+// Types
+import type { Product, User } from '@/types';
+```
+
+## Module-Specific Patterns
+
+### Public API Imports
+Always import from module public APIs, never from internal files:
+
+```tsx
+// ✅ Good - uses public API
+import { ProductList, useProducts } from '@/modules/products';
+import { FilterPanel } from '@/modules/filters';
+
+// ❌ Bad - imports directly from internal files
+import ProductList from '@/modules/products/components/product-list';
+import { useProducts } from '@/modules/products/hooks/use-products';
+```
+
+### Server Actions and API Routes
+Use consistent patterns for server-side imports:
+
+```tsx
+// Server Actions
+import { createUser } from '@/utils/actions/user';
+import { userSchema } from '@/utils/actions/user.validation';
+
+// API Routes
+import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@/utils/auth';
+import prisma from '@/utils/prisma';
+```
+
+## Framework-Specific Patterns
+
+### Next.js App Router
+```tsx
+// Page components
+import { Metadata } from 'next';
+import { notFound } from 'next/navigation';
+import ProductList from '@/modules/products/components/product-list';
+
+// Layout components
+import { Inter } from 'next/font/google';
+import { AuthProvider } from '@/providers/auth-provider';
+import '@/styles/globals.css';
+```
+
+### React Components
+```tsx
+// Client components
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/hooks/use-auth';
+
+// Server components (no 'use client')
+import { fetchProducts } from '@/modules/products/api/product-service';
+import ProductGrid from '@/modules/products/components/product-grid';
+```
+
+## Configuration
+
+For TypeScript path mapping configuration, see @code-styles.mdc.
+
+## Best Practices
+
+### Do's
+- ✅ Use `@/` for all imports from project root
+- ✅ Use relative imports within the same module
+- ✅ Group imports logically with blank lines
+- ✅ Import from module public APIs
+- ✅ Keep import statements at the top of files
+- ✅ Use type-only imports when importing only types
+
+### Don'ts
+- ❌ Mix relative and absolute imports for the same directory level
+- ❌ Import directly from internal module files
+- ❌ Use deep relative imports (`../../../`)
+- ❌ Import implementation details from other modules
+- ❌ Place imports in the middle of files
+
+### Type-Only Imports
+Use `import type` for type-only imports to improve build performance:
+
+```tsx
+// ✅ Good - type-only import
+import type { User } from '@/types/user';
+import type { ComponentProps } from 'react';
+
+// ✅ Good - mixed import with type modifier
+import { fetchUser, type UserResponse } from '@/utils/api/user';
+
+// ❌ Avoid - importing types as regular imports when only using as types
+import { User } from '@/types/user'; // if only used as a type
+```
+
+### Dynamic Imports
+For code splitting and lazy loading:
+
+```tsx
+// Component lazy loading
+import { lazy } from 'react';
+const ProductModal = lazy(() => import('@/modules/products/components/product-modal'));
+
+// Dynamic imports in functions
+const loadChart = async () => {
+  const { Chart } = await import('@/components/chart');
+  return Chart;
+};
+```
+
+## Common Patterns by File Type
+
+### Components
+```tsx
+import { ComponentProps } from 'react';
+import { cn } from '@/utils/cn';
+import { Button } from '@/components/ui/button';
+import type { VariantProps } from 'class-variance-authority';
+```
+
+### API Routes
+```tsx
+import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import { auth } from '@/utils/auth';
+import prisma from '@/utils/prisma';
+```
+
+### Server Actions
+```tsx
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { userSchema } from '@/utils/actions/user.validation';
+import prisma from '@/utils/prisma';
+```
+
+### Hooks
+```tsx
+import { useState, useEffect, useCallback } from 'react';
+import { useAuth } from '@/hooks/use-auth';
+import { fetchData } from '@/utils/api';
+```
+
+### Utilities
+```tsx
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+```
+
+This pattern ensures consistent, maintainable, and scalable import organization across your entire codebase.

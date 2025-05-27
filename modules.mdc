@@ -1,0 +1,145 @@
+---
+description: Comprehensive guidelines for module structure, boundaries, and best practices for imports and exports.
+globs: 
+alwaysApply: true
+---
+# Module Structure
+
+Each module should follow this consistent structure:
+```
+src/modules/[module-name]/
+  components/          # Module-specific components
+  hooks/               # Module-specific hooks  
+  context/             # Module-specific context providers
+  api/                 # API and data fetching functions
+  utils/               # Module-specific utilities
+  types.ts             # Type definitions
+  index.tsx            # Public API - only export what's needed externally
+```
+
+## Module Components
+Use `index.tsx` as the default export file for component directories:
+
+```
+// Prefer
+src/modules/products/components/product-list/index.tsx
+// Import as:
+import ProductList from '../components/product-list';
+
+// Over
+src/modules/products/components/product-list/product-list.tsx
+// Which requires:
+import ProductList from '../components/product-list/product-list';
+```
+
+## Naming Consistency
+For comprehensive naming conventions, see @naming-conventions.mdc.
+
+Component names should match their purpose and file/folder names:
+
+```tsx
+// Good - name matches purpose and location
+// In src/modules/products/components/product-list/index.tsx
+export default function ProductList() {...}
+
+// Bad - name doesn't match location
+// In src/modules/products/components/product-list/index.tsx
+export default function ItemGrid() {...}
+```
+
+# Module Guidelines
+
+## Avoiding Circular Dependencies
+
+1. **Dependency Direction**: Components → Modules (not both ways).
+2. **Proper Boundaries**: Keep business logic in modules, UI primitives in components.
+3. **Use Public APIs**: Never import internal module components directly.
+
+## Public APIs
+
+- Every module must have a clear public API through its `index.tsx` file.
+- Only export what should be accessible to other modules.
+- Internal components should not be directly imported from outside.
+
+### Example
+
+```typescript
+// src/modules/home/index.tsx
+import Page from './components/page'; // Main page component
+import Hero from './components/hero'; // Hero section component
+import { useIsMobile, IsMobileProvider } from './context/is-mobile-context'; // Context for mobile detection
+import type { PageProps, HeroProps } from './types'; // Type definitions
+
+// Export the main component
+export default Page;
+
+// Export other items that should be public
+export { Hero, useIsMobile, IsMobileProvider };
+export type { PageProps, HeroProps };
+```
+
+This example demonstrates how to structure a module's public API, ensuring that only the necessary components, hooks, and types are exposed. It also clarifies the purpose of each export for better readability and follows proper naming conventions.
+
+## Import Rules
+
+For comprehensive import patterns and organization, see @import-patterns.mdc.
+
+### Within Modules
+Use relative imports:
+```tsx
+// Inside src/modules/products/components/product-card.tsx
+import ProductRating from './product-rating';
+```
+
+### Between Modules
+Use public API imports:
+```tsx
+// Good: uses public API
+import { FilterPanel } from '@/modules/filters';
+
+// Bad: imports directly from internal file
+import FilterPanel from '@/modules/filters/components/filter-panel';
+```
+
+### Component Imports
+```tsx
+// Components should import from modules' public APIs
+import { Header } from '@/modules/layout';
+```
+
+## Feature Organization
+
+Keep related code together in modules. For example:
+
+```
+src/modules/products/
+  components/          # Product-specific components
+  hooks/               # Product-specific hooks
+  context/             # Product-specific context providers
+  api/                 # API and data fetching functions
+  utils/               # Product-specific utilities
+  types.ts             # Type definitions
+  index.tsx            # Public API
+```
+
+## Testing Note
+
+For testing organization and patterns, see @testing.mdc.
+
+- Colocate tests with modules for better organization.
+- Use a dedicated `__tests__` folder for integration or end-to-end tests.
+
+Example:
+
+```
+src/modules/products/
+  components/
+    product-list/
+      index.tsx
+      product-list.test.tsx
+  api/
+    product-service.ts
+    product-service.test.ts
+  __tests__/
+    integration.test.ts
+```

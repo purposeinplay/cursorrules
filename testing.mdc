@@ -1,0 +1,234 @@
+---
+description: Testing practices using Vitest, including mocks, organization, and best practices.
+globs: 
+alwaysApply: true
+---
+# Testing Guidelines
+
+## Testing Strategy
+
+We use a three-tier testing approach:
+1. **Unit Tests**: Vitest for testing individual functions and utilities
+2. **Component Tests**: Testing Library with Vitest for React component testing
+3. **E2E Tests**: Playwright for end-to-end user flows
+
+## Unit Testing with Vitest
+
+### Testing Framework
+- `vitest` is used for unit testing
+- Tests are colocated next to the tested file
+  - Example: `dir/format.ts` and `dir/format.test.ts`
+- AI tests are placed in the `__tests__` directory and are not run by default (they use a real LLM)
+
+### Common Mocks
+
+#### Server-Only Mock
+```ts
+vi.mock("server-only", () => ({}));
+```
+
+#### Prisma Mock
+```ts
+import { beforeEach } from "vitest";
+import prisma from "@/utils/__mocks__/prisma";
+
+vi.mock("@/utils/prisma");
+
+describe("example", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("test", async () => {
+    prisma.group.findMany.mockResolvedValue([]);
+  });
+});
+```
+
+## Component Testing with Testing Library
+
+### Setup
+```bash
+pnpm add -D @testing-library/react @testing-library/jest-dom @testing-library/user-event
+```
+
+### Basic Component Test
+```tsx
+import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { expect, test } from 'vitest';
+import Button from './button';
+
+test('renders button with text', () => {
+  render(<Button>Click me</Button>);
+  expect(screen.getByRole('button', { name: /click me/i })).toBeInTheDocument();
+});
+
+test('calls onClick when clicked', async () => {
+  const user = userEvent.setup();
+  const handleClick = vi.fn();
+  
+  render(<Button onClick={handleClick}>Click me</Button>);
+  
+  await user.click(screen.getByRole('button'));
+  expect(handleClick).toHaveBeenCalledOnce();
+});
+```
+
+### Testing Components with Context
+```tsx
+import { render, screen } from '@testing-library/react';
+import { AuthProvider } from '@/providers/auth-provider';
+
+function renderWithAuth(ui: React.ReactElement) {
+  return render(
+    <AuthProvider>
+      {ui}
+    </AuthProvider>
+  );
+}
+
+test('shows user profile when authenticated', () => {
+  renderWithAuth(<UserProfile />);
+  expect(screen.getByText(/welcome/i)).toBeInTheDocument();
+});
+```
+
+### Testing Server Components
+For server components, test the data fetching logic separately:
+
+```tsx
+// Test the data fetching function
+import { fetchProducts } from '@/modules/products/api/product-service';
+
+test('fetchProducts returns formatted data', async () => {
+  const products = await fetchProducts({ limit: 10 });
+  expect(products).toHaveLength(10);
+  expect(products[0]).toHaveProperty('id');
+});
+```
+
+## E2E Testing with Playwright
+
+### Setup
+```bash
+pnpm add -D @playwright/test
+npx playwright install
+```
+
+### Basic E2E Test
+```typescript
+// e2e/auth.spec.ts
+import { test, expect } from '@playwright/test';
+
+test('user can sign in', async ({ page }) => {
+  await page.goto('/login');
+  
+  await page.fill('[data-testid="email"]', 'user@example.com');
+  await page.fill('[data-testid="password"]', 'password123');
+  await page.click('[data-testid="submit"]');
+  
+  await expect(page).toHaveURL('/dashboard');
+  await expect(page.getByText('Welcome back')).toBeVisible();
+});
+```
+
+### Page Object Model
+```typescript
+// e2e/pages/login-page.ts
+export class LoginPage {
+  constructor(private page: Page) {}
+
+  async goto() {
+    await this.page.goto('/login');
+  }
+
+  async login(email: string, password: string) {
+    await this.page.fill('[data-testid="email"]', email);
+    await this.page.fill('[data-testid="password"]', password);
+    await this.page.click('[data-testid="submit"]');
+  }
+
+  async expectLoginError() {
+    await expect(this.page.getByText('Invalid credentials')).toBeVisible();
+  }
+}
+
+// Usage in test
+test('login flow', async ({ page }) => {
+  const loginPage = new LoginPage(page);
+  await loginPage.goto();
+  await loginPage.login('user@example.com', 'password123');
+});
+```
+
+### Testing API Endpoints
+```typescript
+test('API returns user data', async ({ request }) => {
+  const response = await request.get('/api/user/profile');
+  expect(response.ok()).toBeTruthy();
+  
+  const data = await response.json();
+  expect(data).toHaveProperty('email');
+});
+```
+
+## File Organization
+
+### Test File Structure
+```
+src/modules/products/
+  components/
+    product-list/
+      index.tsx
+      index.test.tsx              # Component tests
+  api/
+    product-service.ts
+    product-service.test.ts       # Unit tests
+  __tests__/
+    integration.test.ts           # Integration tests
+e2e/
+  products/
+    product-flow.spec.ts          # E2E tests
+  pages/
+    product-page.ts               # Page objects
+```
+
+### Test Data
+```typescript
+// __tests__/fixtures/products.ts
+export const mockProducts = [
+  { id: 1, name: 'Product 1', price: 100 },
+  { id: 2, name: 'Product 2', price: 200 },
+];
+
+// Usage
+import { mockProducts } from '../fixtures/products';
+```
+
+## Best Practices
+
+### General
+- Each test should be independent
+- Use descriptive test names that explain the behavior
+- Mock external dependencies
+- Clean up mocks between tests
+- Avoid testing implementation details
+
+### Component Testing
+- Test user interactions, not internal state
+- Use `screen.getByRole()` over `getByTestId()` when possible
+- Test accessibility features (ARIA labels, keyboard navigation)
+- Mock API calls and external dependencies
+
+### E2E Testing
+- Use `data-testid` attributes for reliable element selection
+- Test critical user journeys end-to-end
+- Keep E2E tests focused on happy paths and critical edge cases
+- Use Page Object Model for complex flows
+- Run E2E tests in CI/CD pipeline
+
+### Performance
+- Run unit and component tests frequently during development
+- Run E2E tests on pull requests and before deployment
+- Use test parallelization for faster feedback

@@ -1,0 +1,44 @@
+---
+description: Integration guide for the Aegis Framework - an AI-powered project planning and execution system.
+globs: 
+alwaysApply: true
+---
+# Aegis Framework Integration
+
+## Overview
+
+We use the [Aegis Framework](mdc:https:/buildsomething.ai/aegis) for AI-powered project planning and execution.
+
+## Setup Requirements
+
+For the AI assistant in Cursor to use Aegis commands:
+
+1. **Copy Aegis to your project**
+   - Add the Aegis framework to `.context` folder in your project root
+   - This folder contains all framework files and instructions
+
+2. **Configure Cursor with COMMANDS.json**
+   - Copy the contents of `.context/COMMANDS.json`
+   - Add it to Cursor's rules section (Settings → Rules)
+   - This uses a smaller context window, making AI interactions more efficient
+
+## Usage
+
+Once configured, the AI can execute Aegis commands through natural language. Common commands include:
+- `/aegis plan` - Project planning
+- `/aegis start` - Start development session
+- `/aegis save` - Save progress
+- `/aegis task` - Task management
+- `/aegis status` - Check status
+
+## Documentation
+
+All Aegis documentation is maintained in the `.context` folder:
+- `.context/AI_INSTRUCTIONS.md` - Complete framework documentation
+- `.context/COMMANDS.json` - Command definitions
+- `.context/README.md` - Aegis overview
+
+## Integration Notes
+
+- Reference task IDs in git commits (e.g., "Related: TASK-001")
+- Follow the workflows defined in the `.context` documentation

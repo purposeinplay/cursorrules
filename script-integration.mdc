@@ -1,0 +1,80 @@
+---
+description: Guidelines for integrating third-party scripts like Google Tag Manager using isolated client components.
+globs: 
+alwaysApply: true
+---
+# Third-Party Script Integration
+
+External services like **Google Tag Manager**, **Intercom**, or **Hotjar** often require `<script>` tags to be inserted into your page layout. To keep these integrations clean and modular, we isolate each script into a **dedicated client component**.
+
+## Folder Structure
+
+Place all third-party script integrations in:
+
+```
+src/utils/scripts/
+```
+
+Each file represents one service (e.g., `gtm.tsx`, `intercom.tsx`, `hotjar.tsx`).
+
+---
+
+## Example: Google Tag Manager Component
+
+```tsx
+// src/utils/scripts/gtm.tsx
+"use client";
+
+import Script from "next/script";
+
+export function GTMScript() {
+  return (
+    <>
+      <Script
+        id="gtm-script"
+        strategy="afterInteractive"
+        dangerouslySetInnerHTML={{
+          __html: \`
+            (function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+            new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+            j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+            'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+            })(window,document,'script','dataLayer','GTM-XXXXXXX');
+          \`,
+        }}
+      />
+    </>
+  );
+}
+```
+
+Replace `GTM-XXXXXXX` with your actual GTM container ID.
+
+---
+
+## Usage in Layout
+
+Import and render the GTM script component inside your layout:
+
+```tsx
+// app/layout.tsx
+import { GTMScript } from "@/utils/scripts/gtm";
+
+export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <>
+      {children}
+      <GTMScript />
+    </>
+  );
+}
+```
+
+---
+
+## Why This Pattern?
+
+- ✅ Keeps third-party logic decoupled from layout logic
+- ✅ Enables conditional script loading per layout or route
+- ✅ Makes scripts easy to find, update, and remove
+- ✅ Ensures compatibility via `use client` + `next/script`

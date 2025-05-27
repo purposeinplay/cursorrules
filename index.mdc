@@ -1,0 +1,145 @@
+---
+description: Central index for all Cursor rules in this repository
+globs: 
+alwaysApply: true
+---
+# Cursor Rules
+
+This directory contains the coding rules and conventions for our Next.js project. These rules help maintain consistency and quality across the codebase.
+
+## Cross-Reference System
+
+Many rules reference other rules for detailed information. When you see `@rule-name.mdc`, it means you should consult that rule file for comprehensive coverage of that topic. This prevents duplication and establishes clear sources of truth.
+
+## Project Size Considerations
+
+These rules are designed for **large-scale production applications**. Cursor should apply these patterns when:
+
+### When to Use Full Architecture
+- **Large Projects** (50+ components)
+  - Use module-based architecture
+  - Implement Redux Toolkit for global state
+  - Use comprehensive error boundaries
+  - Apply strict TypeScript configurations
+  
+- **Medium Projects** (20-50 components)
+  - Use simplified module structure
+  - Consider Context API over Redux for simpler state
+  - Focus on core patterns (components, hooks, utilities)
+  
+- **Small Projects** (<20 components)
+  - Use flat structure in `src/`
+  - Local state and React Query may suffice
+  - Apply naming conventions and basic patterns only
+
+### Indicators for Full Architecture
+Cursor should suggest the full architecture when detecting:
+- Multiple feature areas or domains
+- Team collaboration requirements
+- Complex state management needs
+- Enterprise or production deployment targets
+- Existing module structure in the codebase
+
+### Simplified Approach
+For smaller projects or prototypes, Cursor should:
+- Suggest simpler alternatives in comments
+- Focus on core conventions (naming, TypeScript)
+- Avoid over-engineering with unnecessary abstractions
+- Recommend gradual adoption as the project grows
+
+## Master Rule Index
+
+This document lists all active Cursor rules in this repository, grouped by category.
+
+## Architecture & Structure
+
+| Rule File | Description |
+| :-- | :-- |
+| @architecture-principles.mdc | High-level code organization principles including SRP, consistency, and discoverability |
+| @project-structure.mdc | Directory layout and naming conventions for the entire monorepo |
+| @modules.mdc | Module organization patterns and structure within the application |
+| @packages.mdc | Overview of reusable libraries and configurations in the `packages` directory |
+
+## Project Management & Planning
+
+| Rule File | Description |
+| :-- | :-- |
+| @aegis-framework.mdc | AI-powered project planning and execution using the Aegis Framework for task management, sessions, and decision tracking |
+
+## Backend & API
+
+| Rule File | Description |
+| :-- | :-- |
+| @server-actions.mdc | Guidelines for implementing server actions in Next.js with validation and structure |
+| @data-fetching.mdc | Comprehensive React Query patterns for data fetching, caching, and synchronization |
+
+## Code Quality & Standards
+
+| Rule File | Description |
+| :-- | :-- |
+| @code-styles.mdc | Code style guidelines including TypeScript, Tailwind, Prettier, ESLint, and dependency management |
+| @naming-conventions.mdc | Standard naming conventions for variables, files, components, and types |
+| @import-patterns.mdc | Comprehensive guide for import patterns, path aliases, and import organization best practices |
+| @utilities-guidelines.mdc | Guidelines for organizing utility functions between global utils and module-specific utilities |
+
+## Version Control & Collaboration
+
+| Rule File | Description |
+| :-- | :-- |
+| @version-control.mdc | Git workflow, Conventional Commits, branch strategies, changelog management, and AI commit guidelines |
+
+## Performance & Optimization
+
+| Rule File | Description |
+| :-- | :-- |
+| @performance-optimization.mdc | Core Web Vitals, bundle optimization, caching strategies, and performance monitoring |
+
+## Error Handling & Monitoring
+
+| Rule File | Description |
+| :-- | :-- |
+| @errors.mdc | Comprehensive error handling patterns with Sentry integration, error boundaries, and monitoring |
+
+## Frontend & UI
+
+| Rule File | Description |
+| :-- | :-- |
+| @page-structure.mdc | Best practices for organizing and implementing Next.js App Router pages |
+| @ui-components.mdc | UI component conventions using Tailwind CSS, Shadcn UI, and the cn() utility for styling |
+| @state-management.mdc | Comprehensive state management using Redux Toolkit, React Query, Context API, and local state patterns |
+| @internationalization.mdc | Complete internationalization setup with next-intl, routing, translations, and language switching |
+
+## Testing
+
+| Rule File | Description |
+| :-- | :-- |
+| @testing.mdc | Comprehensive testing practices using Vitest, Testing Library, and Playwright for unit, component, and E2E tests |
+
+## Build & Development
+
+| Rule File | Description |
+| :-- | :-- |
+| @build.mdc | Build configuration, development commands, and troubleshooting guide |
+| @script-integration.mdc | Guidelines for integrating and managing scripts in the project |
+| @installing-packages.mdc | Comprehensive pnpm workspace management, version control, and troubleshooting guide |
+
+## Meta & Documentation
+
+| Rule File | Description |
+| :-- | :-- |
+| @cursor-rules.mdc | How to add or edit Cursor rules in our project |
+
+## Key Principles
+
+1. **Single Source of Truth**: Each topic has one authoritative file, others reference it
+2. **No Duplication**: Cross-references prevent content duplication
+3. **Consistency**: All rules follow the same patterns and conventions
+4. **Scalability**: Rules support projects from small prototypes to large applications
+5. **Maintainability**: Clear organization makes rules easy to update
+
+## Notes
+
+- This index excludes system files like `.DS_Store`
+- All rule files follow the naming convention: `rule-name.mdc`
+- Rules are actively maintained and updated based on project evolution
+- Cross-references use the format `@rule-name.mdc` for easy navigation

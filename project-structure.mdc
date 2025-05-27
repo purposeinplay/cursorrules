@@ -1,0 +1,280 @@
+---
+description: Directory layout and naming conventions for the entire monorepo.
+globs: 
+alwaysApply: true
+---
+# Project Structure
+
+## Main Structure
+
+- We use Turborepo with pnpm workspaces
+- Main app is in `apps/web`
+- Packages are in the `packages` folder
+- Server actions are in `apps/web/utils/actions` folder
+
+```tree
+.
+├── apps
+│   ├── web/             # Main Next.js application
+│   │   ├── app/         # Next.js App Router
+│   │   │   ├── (app)/   # Main application pages
+│   │   │   │   ├── automation/     # AI assistant feature
+│   │   │   │   ├── reply-zero/     # Reply Zero feature
+│   │   │   │   ├── settings/       # User settings
+│   │   │   │   ├── setup/          # Main onboarding
+│   │   │   │   ├── clean/          # Bulk email cleanup
+│   │   │   │   ├── smart-categories/ # Smart sender categorization
+│   │   │   │   ├── bulk-unsubscribe/ # Bulk unsubscribe
+│   │   │   │   ├── stats/          # Email analytics
+│   │   │   │   ├── mail/           # Email client (in beta)
+│   │   │   │   └── ... (other app routes)
+│   │   │   ├── api/    # API Routes
+│   │   │   │   ├── knowledge/      # Knowledge base API
+│   │   │   │   ├── reply-tracker/  # Reply tracking
+│   │   │   │   ├── clean/          # Cleanup API
+│   │   │   │   ├── ai/            # AI features API
+│   │   │   │   ├── user/          # User management
+│   │   │   │   ├── google/        # Google integration
+│   │   │   │   ├── auth/          # Authentication
+│   │   │   │   └── ... (other APIs)
+│   │   │   ├── (landing)/  # Marketing/landing pages
+│   │   │   ├── blog/       # Blog pages
+│   │   │   ├── layout.tsx  # Root layout
+│   │   │   └── ... (other app files)
+│   │   ├── utils/       # Utility functions and helpers (see @utilities-guidelines.mdc)
+│   │   │   ├── actions/    # Server actions
+│   │   │   ├── ai/         # AI-related utilities
+│   │   │   ├── llms/       # Language model utilities
+│   │   │   ├── gmail/      # Gmail integration utilities
+│   │   │   ├── redis/      # Redis utilities
+│   │   │   ├── user/       # User-related utilities
+│   │   │   ├── parse/      # Parsing utilities
+│   │   │   ├── queue/      # Queue management
+│   │   │   ├── error-messages/  # Error handling
+│   │   │   └── *.ts        # Other utility files (auth, email, etc.)
+│   │   ├── public/      # Static assets (images, fonts)
+│   │   ├── prisma/      # Prisma schema and client
+│   │   ├── styles/      # Global CSS styles
+│   │   ├── providers/   # React Context providers
+│   │   ├── hooks/       # Custom React hooks
+│   │   ├── sanity/      # Sanity CMS integration
+│   │   ├── __tests__/   # AI test files (Vitest)
+│   │   ├── scripts/     # Utility scripts
+│   │   ├── store/       # State management (see @state-management.mdc)
+│   │   ├── types/       # TypeScript type definitions
+│   │   ├── next.config.mjs
+│   │   ├── package.json
+│   │   └── ... (config files)
+│   └── unsubscriber/    # Automates unsubscribes using browser automation. Not currently in use
+├── packages             # Shared packages (see @packages.mdc)
+    ├── tinybird/
+    ├── eslint-config/
+    ├── loops/
+    ├── resend/
+    ├── tinybird-ai-analytics/
+    └── tsconfig/
+```
+
+## File Organization
+
+### Component Placement Strategy
+
+#### Shadcn UI Components
+- **Location**: `components/ui/`
+- **Purpose**: Design system components from Shadcn UI
+- **Examples**: `button.tsx`, `input.tsx`, `card.tsx`, `dialog.tsx`
+- For UI component patterns and styling, see @ui-components.mdc
+
+```
+components/
+├── ui/                    # Shadcn UI components
+│   ├── button.tsx
+│   ├── card.tsx
+│   ├── dialog.tsx
+│   └── ...
+├── user-menu.tsx          # Shared across multiple pages
+├── search-bar.tsx         # Reusable search component
+└── modals/
+    ├── confirm-dialog.tsx # Used in multiple features
+    └── image-preview.tsx  # Shared modal component
+```
+
+#### Page-Specific Components
+Components used only within a specific page should be colocated:
+
+```
+app/(app)/dashboard/
+├── page.tsx               # Dashboard page
+├── stats-card.tsx         # Only used in dashboard
+├── activity-feed.tsx      # Dashboard-specific component
+└── widgets/
+    ├── sales-widget.tsx    # Only used on dashboard
+    └── traffic-widget.tsx  # Only used on dashboard
+```
+
+#### ✅ Good: Shared Components in Global Directory
+```
+components/
+├── user-menu.tsx          # Used in header across all pages
+├── search-bar.tsx         # Used in multiple pages
+├── data-table.tsx         # Reusable table component
+└── modals/
+    ├── confirm-dialog.tsx  # Used across multiple features
+    └── image-preview.tsx   # Used in multiple contexts
+```
+
+#### ❌ Bad: Shared Component in Feature Directory
+```
+app/(app)/products/
+├── page.tsx
+└── user-avatar.tsx        # ❌ Used in multiple places, should be in components/
+```
+
+#### ❌ Bad: Feature-Specific Component in Global Directory
+```
+components/
+├── navigation.tsx
+└── product-price-calculator.tsx  # ❌ Only used in products, should be colocated
+```
+
+### Component Organization Patterns
+
+#### Page-Level Organization
+```
+app/(app)/settings/
+├── page.tsx               # Main settings page
+├── layout.tsx             # Settings layout (if needed)
+├── profile/
+│   ├── page.tsx          # Profile settings page
+│   ├── profile-form.tsx  # Form component for profile
+│   └── avatar-upload.tsx # Avatar upload component
+├── billing/
+│   ├── page.tsx          # Billing settings page
+│   ├── billing-form.tsx  # Billing form component
+│   └── payment-methods.tsx # Payment methods component
+└── notifications/
+    ├── page.tsx          # Notification settings page
+    └── notification-preferences.tsx # Preferences component
+```
+
+#### Module-Based Organization
+For complex features, see @modules.mdc for detailed module structure guidelines.
+
+### Best Practices
+
+#### Component Naming and Structure
+For comprehensive naming conventions, see @naming-conventions.mdc.
+
+#### When to Move Components
+
+**Move to `components/` when:**
+- Component is used in 2+ different page routes
+- Component becomes part of your design system
+- Component has reusable business logic
+
+**Keep colocated when:**
+- Component is highly specific to one feature
+- Component is unlikely to be reused
+- Component is tightly coupled to its parent
+
+### Integration with Import Patterns
+
+For proper import patterns based on component location, see @import-patterns.mdc.
+
+## Middleware Composition
+
+### Composing Multiple Middleware Functions
+We prefer middleware composition for better organization and maintainability. Use the `composeMiddlewares` utility to chain multiple middleware functions:
+
+```typescript
+// middleware.ts
+import { composeMiddlewares } from '@/utils/middleware/utils';
+
+export const middleware = composeMiddlewares(
+  withDomainRobots,
+  withIp2Location,
+  withRestrictedCountry,
+  withProtectedRoutes,
+  withI18n,
+);
+
+export const config = {
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)']
+};
+```
+
+### Individual Middleware Structure
+Each middleware function should follow this pattern:
+
+```typescript
+// utils/middleware/with-protected-routes.ts
+import { NextRequest, NextFetchEvent, NextResponse } from 'next/server';
+import type { MiddlewareWithNext } from '@/utils/middleware/utils';
+
+export const withProtectedRoutes: MiddlewareWithNext = async (
+  req: NextRequest,
+  evt: NextFetchEvent,
+  next: () => Promise<NextResponse>
+) => {
+  // Your middleware logic here
+  const pathname = req.nextUrl.pathname;
+  
+  if (pathname.startsWith('/protected')) {
+    // Check authentication
+    const token = req.cookies.get('auth-token');
+    if (!token) {
+      return NextResponse.redirect(new URL('/login', req.url));
+    }
+  }
+
+  // Continue to next middleware
+  return next();
+};
+```
+
+### Benefits of Middleware Composition
+- ✅ **Separation of Concerns**: Each middleware handles one specific responsibility
+- ✅ **Reusability**: Individual middleware can be reused across different routes
+- ✅ **Testability**: Each middleware can be tested in isolation
+- ✅ **Maintainability**: Easy to add, remove, or reorder middleware
+- ✅ **Type Safety**: Full TypeScript support with proper typing
+
+### Middleware Organization
+```
+utils/middleware/
+├── utils.ts                    # composeMiddlewares utility
+├── with-domain-robots.ts       # Domain-specific robots handling
+├── with-ip2-location.ts        # IP geolocation middleware
+├── with-restricted-country.ts  # Country restriction middleware
+├── with-protected-routes.ts    # Authentication middleware
+└── with-i18n.ts               # Internationalization middleware
+```
+
+## New Pages
+
+- Create new pages at: `apps/web/app/(app)/PAGE_NAME/page.tsx`
+- Components for the page are either in `page.tsx` or in the `apps/web/app/(app)/PAGE_NAME` folder
+- Pages are Server components for direct data loading
+- Use React Query for data fetching in deeply nested components (see @data-fetching.mdc)
+- Components with `onClick` must be client components with `use client` directive
+- Server action files must start with `use server`
+
+## Module Structure
+For detailed module organization, see @modules.mdc.
+
+### Examples
+
+**Good component placement:**
+```typescript
+// Shared across modules - goes in src/components/
+// File: src/components/data-table.tsx
+export function DataTable<T>({ columns, data }: DataTableProps<T>) {
+  // Generic table implementation
+}
+
+// Module-specific - goes in module
+// File: src/modules/users/components/user-permissions.tsx
+export function UserPermissions({ userId }: { userId: string }) {
+  // User-specific permissions UI
+}
+```

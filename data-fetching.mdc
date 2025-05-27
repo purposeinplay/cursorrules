@@ -1,0 +1,284 @@
+---
+description: Fetching data from the API using fetch in Next.js
+globs: 
+alwaysApply: true
+---
+# Data Fetching
+
+We use React Query (TanStack Query) for all data fetching needs, providing powerful caching, synchronization, and server state management.
+
+## React Query Setup
+
+### Provider Configuration
+```typescript
+// providers/query-provider.tsx
+'use client';
+
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { useState } from 'react';
+
+export function QueryProvider({ children }: { children: React.ReactNode }) {
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        defaultOptions: {
+          queries: {
+            staleTime: 60 * 1000, // 1 minute
+            retry: (failureCount, error) => {
+              // Don't retry on 4xx errors
+              if (error?.status >= 400 && error?.status < 500) {
+                return false;
+              }
+              return failureCount < 3;
+            },
+          },
+        },
+      })
+  );
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      {children}
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
+  );
+}
+```
+
+## Data Fetching Patterns
+
+### Basic Query Hook
+```typescript
+// hooks/use-products.ts
+import { useQuery } from '@tanstack/react-query';
+
+export function useProducts(page: number = 1) {
+  return useQuery({
+    queryKey: ['products', page],
+    queryFn: async () => {
+      const response = await fetch(`/api/products?page=${page}`);
+      if (!response.ok) throw new Error('Failed to fetch products');
+      return response.json();
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+}
+```
+
+### Query with Parameters
+```typescript
+// hooks/use-product.ts
+export function useProduct(id: string) {
+  return useQuery({
+    queryKey: ['products', id],
+    queryFn: async () => {
+      const response = await fetch(`/api/products/${id}`);
+      if (!response.ok) throw new Error('Failed to fetch product');
+      return response.json();
+    },
+    enabled: !!id, // Only run query if id exists
+  });
+}
+```
+
+### Mutations
+```typescript
+// hooks/use-product-mutations.ts
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+
+export function useCreateProduct() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (productData: CreateProductData) => {
+      const response = await fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(productData),
+      });
+      if (!response.ok) throw new Error('Failed to create product');
+      return response.json();
+    },
+    onSuccess: () => {
+      // Invalidate and refetch products list
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
+  });
+}
+
+export function useUpdateProduct() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: UpdateProductData }) => {
+      const response = await fetch(`/api/products/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      if (!response.ok) throw new Error('Failed to update product');
+      return response.json();
+    },
+    onSuccess: (updatedProduct) => {
+      // Update specific product in cache
+      queryClient.setQueryData(['products', updatedProduct.id], updatedProduct);
+      // Invalidate products list
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+    },
+  });
+}
+```
+
+## Usage in Components
+
+### Server Components with Prefetching
+```typescript
+// app/products/page.tsx
+import { dehydrate, HydrationBoundary } from '@tanstack/react-query';
+import { getQueryClient } from '@/utils/get-query-client';
+import ProductList from '@/components/product-list';
+
+export default async function ProductsPage() {
+  const queryClient = getQueryClient();
+  
+  // Prefetch data on server
+  await queryClient.prefetchQuery({
+    queryKey: ['products', 1],
+    queryFn: () => fetch(`${process.env.API_URL}/products?page=1`).then(res => res.json()),
+  });
+
+  return (
+    <HydrationBoundary state={dehydrate(queryClient)}>
+      <ProductList />
+    </HydrationBoundary>
+  );
+}
+```
+
+### Client Components
+```typescript
+// components/product-list.tsx
+'use client';
+
+import { useProducts } from '@/hooks/use-products';
+
+export default function ProductList() {
+  const { data: products, isLoading, error, refetch } = useProducts();
+
+  if (isLoading) return <div>Loading products...</div>;
+  if (error) return <div>Error: {error.message}</div>;
+
+  return (
+    <div>
+      {products?.map((product) => (
+        <ProductCard key={product.id} product={product} />
+      ))}
+      <button onClick={() => refetch()}>Refresh</button>
+    </div>
+  );
+}
+```
+
+## Advanced Patterns
+
+### Optimistic Updates
+```typescript
+export function useToggleFavorite() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ productId, isFavorite }: { productId: string; isFavorite: boolean }) => {
+      const response = await fetch(`/api/products/${productId}/favorite`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isFavorite }),
+      });
+      if (!response.ok) throw new Error('Failed to update favorite');
+      return response.json();
+    },
+    onMutate: async ({ productId, isFavorite }) => {
+      // Cancel outgoing refetches
+      await queryClient.cancelQueries({ queryKey: ['products', productId] });
+
+      // Snapshot previous value
+      const previousProduct = queryClient.getQueryData(['products', productId]);
+
+      // Optimistically update
+      queryClient.setQueryData(['products', productId], (old: Product) => ({
+        ...old,
+        isFavorite,
+      }));
+
+      // Return context with snapshot
+      return { previousProduct };
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error
+      if (context?.previousProduct) {
+        queryClient.setQueryData(['products', variables.productId], context.previousProduct);
+      }
+    },
+    onSettled: (data, error, variables) => {
+      // Always refetch after error or success
+      queryClient.invalidateQueries({ queryKey: ['products', variables.productId] });
+    },
+  });
+}
+```
+
+### Infinite Queries
+```typescript
+// hooks/use-infinite-products.ts
+import { useInfiniteQuery } from '@tanstack/react-query';
+
+export function useInfiniteProducts() {
+  return useInfiniteQuery({
+    queryKey: ['products', 'infinite'],
+    queryFn: async ({ pageParam = 1 }) => {
+      const response = await fetch(`/api/products?page=${pageParam}&limit=20`);
+      if (!response.ok) throw new Error('Failed to fetch products');
+      return response.json();
+    },
+    getNextPageParam: (lastPage, pages) => {
+      return lastPage.hasMore ? pages.length + 1 : undefined;
+    },
+    initialPageParam: 1,
+  });
+}
+
+// Usage in component
+function InfiniteProductList() {
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteProducts();
+
+  return (
+    <>
+      {data?.pages.map((page) =>
+        page.products.map((product) => (
+          <ProductCard key={product.id} product={product} />
+        ))
+      )}
+      <button
+        onClick={() => fetchNextPage()}
+        disabled={!hasNextPage || isFetchingNextPage}
+      >
+        {isFetchingNextPage ? 'Loading more...' : 'Load More'}
+      </button>
+    </>
+  );
+}
+```
+
+## Best Practices
+- Use React Query for all server state management
+- Set appropriate `staleTime` based on data volatility
+- Handle loading and error states consistently
+- Use query invalidation strategically after mutations
+- Implement optimistic updates for better UX
+- Prefetch data on the server when possible
+- Use infinite queries for paginated lists

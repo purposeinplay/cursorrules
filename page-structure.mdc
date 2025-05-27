@@ -1,0 +1,55 @@
+---
+description: Best practices for organizing and implementing Next.js App Router pages.
+globs: 
+alwaysApply: true
+---
+# Page Structure
+
+- Components for the page are either put in `page.tsx`, or in the `apps/web/app/(app)/PAGE_NAME` folder
+- Pages are Server components so you can load data into them directly
+- If we're in a deeply nested component we will use React Query to fetch via API (see @data-fetching.mdc)
+- If you need to use `onClick` in a component, that component is a client component and file must start with `use client` 
+
+# App Router Pages
+
+Your app router pages should:
+- Be thin and focused on routing/data fetching
+- Delegate to modules for business logic and UI components
+- Not contain business logic themselves
+- Use appropriate naming conventions that match their purpose (see @naming-conventions.mdc)
+- Handle async data fetching but defer rendering concerns to components
+
+## Data Fetching Organization
+
+For comprehensive data fetching patterns, see @data-fetching.mdc.
+
+Separate concerns between definition and execution:
+
+```tsx
+// Define reusable data fetching functions in module API folders
+// src/modules/products/api/product-service.ts
+export async function fetchProducts(params) {
+  // Implementation of API call
+  return data;
+}
+
+// Execute data fetching at the page level (App Router)
+// app/products/page.tsx
+import { fetchProducts } from '@/modules/products/api/product-service';
+
+export default async function ProductsPage() {
+  // Data fetching happens here at the page level
+  const products = await fetchProducts({ limit: 10 });
+  
+  // Pass fetched data to components
+  return <ProductList products={products} />;
+}
+```
+
+## Component Organization
+
+For detailed component placement strategy and organization patterns, see @project-structure.mdc.
+
+## State Management
+
+For state management patterns in pages and components, see @state-management.mdc.

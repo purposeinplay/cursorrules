@@ -1,0 +1,511 @@
+---
+description: Guidelines for error handling and integration with Sentry in React and Next.js applications.
+globs: 
+alwaysApply: true
+---
+# Error Handling Guidelines
+
+## Sentry Setup and Configuration
+
+### Installation and Basic Setup
+```bash
+pnpm add @sentry/nextjs
+```
+
+### Configuration
+```typescript
+// sentry.client.config.ts
+import * as Sentry from '@sentry/nextjs';
+
+Sentry.init({
+  dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
+  environment: process.env.NODE_ENV,
+  tracesSampleRate: process.env.NODE_ENV === 'production' ? 0.1 : 1.0,
+  debug: process.env.NODE_ENV === 'development',
+  beforeSend(event) {
+    // Filter out sensitive information
+    if (event.exception) {
+      const error = event.exception.values?.[0];
+      if (error?.value?.includes('password')) {
+        return null; // Don't send events containing passwords
+      }
+    }
+    return event;
+  },
+});
+```
+
+## Using Sentry for Error Reporting
+
+### Manual Error Capturing
+Use `captureException` from `@sentry/nextjs` to manually capture errors in `try/catch` blocks:
+
+```typescript
+import { captureException } from '@sentry/nextjs';
+
+try {
+  // Your logic here
+} catch (error) {
+  captureException(error);
+  console.error(error);
+}
+```
+
+### Enhanced Manual Error Capturing with Context
+```typescript
+import { captureException, setContext, setTag, setUser } from '@sentry/nextjs';
+
+try {
+  // Your logic here
+} catch (error) {
+  // Add additional context
+  setContext('operation', {
+    type: 'data_processing',
+    userId: user.id,
+    timestamp: new Date().toISOString(),
+  });
+  
+  setTag('feature', 'user-management');
+  setUser({ id: user.id, email: user.email });
+  
+  captureException(error);
+  console.error(error);
+}
+```
+
+### React Error Boundary
+Use the `ErrorBoundary` component from `@sentry/nextjs` to automatically catch and report errors in a React component tree:
+
+```tsx
+import { ErrorBoundary } from '@sentry/nextjs';
+
+function MyComponent() {
+  return (
+    <ErrorBoundary fallback={<p>An error occurred.</p>}>
+      <YourComponent />
+    </ErrorBoundary>
+  );
+}
+```
+
+### Enhanced Error Boundary with Custom Fallback
+```tsx
+import { ErrorBoundary } from '@sentry/nextjs';
+import { Button } from '@/components/ui/button';
+
+function ErrorFallback({ error, resetError }: { error: Error; resetError: () => void }) {
+  return (
+    <div className="flex flex-col items-center justify-center p-8 text-center">
+      <h2 className="text-lg font-semibold text-destructive mb-2">Something went wrong</h2>
+      <p className="text-muted-foreground mb-4">
+        We've been notified about this error and are working to fix it.
+      </p>
+      <Button onClick={resetError} variant="outline">
+        Try again
+      </Button>
+    </div>
+  );
+}
+
+function MyComponent() {
+  return (
+    <ErrorBoundary fallback={ErrorFallback}>
+      <YourComponent />
+    </ErrorBoundary>
+  );
+}
+```
+
+### Custom Error Boundary
+If you prefer not to use the Sentry-provided `ErrorBoundary`, you can manually capture errors using `captureException`:
+
+```tsx
+import React from 'react';
+import { captureException } from '@sentry/nextjs';
+
+class CustomErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    captureException(error);
+    console.error(error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return <p>Something went wrong.</p>;
+    }
+
+    return this.props.children;
+  }
+}
+
+export default CustomErrorBoundary;
+```
+
+## Error Handling Patterns
+
+### API Error Handling
+```typescript
+// utils/api-client.ts
+import { captureException } from '@sentry/nextjs';
+
+export async function apiRequest<T>(url: string, options?: RequestInit): Promise<T> {
+  try {
+    const response = await fetch(url, options);
+    
+    if (!response.ok) {
+      const error = new Error(`API Error: ${response.status} ${response.statusText}`);
+      error.cause = {
+        status: response.status,
+        url,
+        method: options?.method || 'GET',
+      };
+      
+      // Don't capture 4xx errors as exceptions (they're user errors)
+      if (response.status >= 500) {
+        captureException(error);
+      }
+      
+      throw error;
+    }
+    
+    return response.json();
+  } catch (error) {
+    if (error instanceof TypeError && error.message.includes('fetch')) {
+      // Network error
+      captureException(new Error('Network error occurred'), {
+        extra: { originalError: error, url },
+      });
+    }
+    throw error;
+  }
+}
+```
+
+### Server Action Error Handling
+```typescript
+// utils/actions/user-actions.ts
+'use server';
+
+import { captureException } from '@sentry/nextjs';
+import { revalidatePath } from 'next/cache';
+
+export async function updateUserProfile(formData: FormData) {
+  try {
+    const userData = {
+      name: formData.get('name') as string,
+      email: formData.get('email') as string,
+    };
+    
+    // Validate data
+    if (!userData.name || !userData.email) {
+      return { error: 'Name and email are required' };
+    }
+    
+    // Update user in database
+    await updateUser(userData);
+    
+    revalidatePath('/profile');
+    return { success: true };
+  } catch (error) {
+    captureException(error, {
+      tags: { action: 'update_user_profile' },
+      extra: { formData: Object.fromEntries(formData) },
+    });
+    
+    return { error: 'Failed to update profile. Please try again.' };
+  }
+}
+```
+
+### React Query Error Handling
+```typescript
+// hooks/use-products.ts
+import { useQuery } from '@tanstack/react-query';
+import { captureException } from '@sentry/nextjs';
+
+export function useProducts() {
+  return useQuery({
+    queryKey: ['products'],
+    queryFn: async () => {
+      try {
+        return await productService.getProducts();
+      } catch (error) {
+        // Only capture unexpected errors, not user-facing ones
+        if (error.status >= 500) {
+          captureException(error, {
+            tags: { feature: 'products', operation: 'fetch' },
+          });
+        }
+        throw error;
+      }
+    },
+    retry: (failureCount, error) => {
+      // Don't retry on 4xx errors
+      if (error?.status >= 400 && error?.status < 500) {
+        return false;
+      }
+      return failureCount < 3;
+    },
+  });
+}
+```
+
+### Form Error Handling
+```tsx
+// components/forms/contact-form.tsx
+import { useState } from 'react';
+import { captureException } from '@sentry/nextjs';
+
+export function ContactForm() {
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (formData: FormData) => {
+    setIsSubmitting(true);
+    setError(null);
+    
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to submit form: ${response.statusText}`);
+      }
+      
+      // Success handling
+    } catch (error) {
+      captureException(error, {
+        tags: { form: 'contact' },
+        user: { id: user?.id },
+      });
+      
+      setError('Failed to submit form. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <form action={handleSubmit}>
+      {error && (
+        <div className="bg-destructive/15 border border-destructive/20 text-destructive p-3 rounded-md mb-4">
+          {error}
+        </div>
+      )}
+      {/* Form fields */}
+    </form>
+  );
+}
+```
+
+## Error Boundary Placement
+
+### Application-Level Error Boundaries
+```tsx
+// app/layout.tsx
+import { ErrorBoundary } from '@sentry/nextjs';
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body>
+        <ErrorBoundary fallback={<GlobalErrorFallback />}>
+          {children}
+        </ErrorBoundary>
+      </body>
+    </html>
+  );
+}
+```
+
+### Feature-Level Error Boundaries
+```tsx
+// app/(app)/dashboard/layout.tsx
+import { ErrorBoundary } from '@sentry/nextjs';
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <ErrorBoundary 
+      fallback={<DashboardErrorFallback />}
+      beforeCapture={(scope) => {
+        scope.setTag('feature', 'dashboard');
+      }}
+    >
+      {children}
+    </ErrorBoundary>
+  );
+}
+```
+
+### Component-Level Error Boundaries
+```tsx
+// components/data-table.tsx
+import { ErrorBoundary } from '@sentry/nextjs';
+
+export function DataTable({ data }: { data: any[] }) {
+  return (
+    <ErrorBoundary fallback={<TableErrorFallback />}>
+      <table>
+        {data.map((row) => (
+          <TableRow key={row.id} data={row} />
+        ))}
+      </table>
+    </ErrorBoundary>
+  );
+}
+```
+
+## Error Context and User Feedback
+
+### Setting User Context
+```typescript
+// utils/sentry-context.ts
+import { setUser, setContext } from '@sentry/nextjs';
+
+export function setSentryUser(user: User) {
+  setUser({
+    id: user.id,
+    email: user.email,
+    username: user.username,
+  });
+}
+
+export function setSentryContext(context: Record<string, any>) {
+  setContext('app_context', context);
+}
+```
+
+### User Feedback Integration
+```tsx
+// components/error-feedback.tsx
+import { captureUserFeedback } from '@sentry/nextjs';
+import { useState } from 'react';
+
+interface ErrorFeedbackProps {
+  eventId: string;
+  onClose: () => void;
+}
+
+export function ErrorFeedback({ eventId, onClose }: ErrorFeedbackProps) {
+  const [feedback, setFeedback] = useState('');
+  const [email, setEmail] = useState('');
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    captureUserFeedback({
+      event_id: eventId,
+      name: 'User',
+      email,
+      comments: feedback,
+    });
+    
+    onClose();
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label htmlFor="email">Email (optional)</label>
+        <input
+          id="email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="w-full p-2 border rounded"
+        />
+      </div>
+      <div>
+        <label htmlFor="feedback">What happened?</label>
+        <textarea
+          id="feedback"
+          value={feedback}
+          onChange={(e) => setFeedback(e.target.value)}
+          className="w-full p-2 border rounded"
+          rows={4}
+          required
+        />
+      </div>
+      <button type="submit" className="bg-blue-500 text-white px-4 py-2 rounded">
+        Send Feedback
+      </button>
+    </form>
+  );
+}
+```
+
+## Performance Monitoring
+
+### Transaction Monitoring
+```typescript
+// utils/performance.ts
+import { startTransaction } from '@sentry/nextjs';
+
+export async function monitoredOperation<T>(
+  name: string,
+  operation: () => Promise<T>
+): Promise<T> {
+  const transaction = startTransaction({ name });
+  
+  try {
+    const result = await operation();
+    transaction.setStatus('ok');
+    return result;
+  } catch (error) {
+    transaction.setStatus('internal_error');
+    throw error;
+  } finally {
+    transaction.finish();
+  }
+}
+
+// Usage
+const result = await monitoredOperation('fetch-user-data', async () => {
+  return await fetchUserData(userId);
+});
+```
+
+## Best Practices
+
+### Error Categorization
+- ✅ **Don't capture 4xx errors** as exceptions (they're user errors)
+- ✅ **Capture 5xx errors** and unexpected exceptions
+- ✅ **Use tags and context** to categorize errors by feature/operation
+- ✅ **Set user context** for better debugging
+
+### Error Boundary Strategy
+- ✅ **Application level**: Catch all unhandled errors
+- ✅ **Feature level**: Isolate errors to specific features
+- ✅ **Component level**: Protect critical components
+- ✅ **Provide meaningful fallbacks** with recovery options
+
+### Development vs Production
+- ✅ **Development**: Log errors to console for immediate feedback
+- ✅ **Production**: Send to Sentry with appropriate sampling
+- ✅ **Staging**: Use Sentry with higher sampling for testing
+- ✅ **Filter sensitive data** before sending to Sentry
+
+### Error Messages
+- ✅ **User-facing**: Friendly, actionable messages
+- ✅ **Developer-facing**: Detailed technical information
+- ✅ **Avoid exposing**: Internal system details to users
+- ✅ **Provide recovery**: Options when possible
+
+### Monitoring and Alerting
+- ✅ **Set up alerts** for critical error thresholds
+- ✅ **Monitor error trends** and patterns
+- ✅ **Track error resolution** and response times
+- ✅ **Regular error review** and cleanup
+
+This comprehensive error handling strategy ensures robust error tracking, user experience protection, and effective debugging capabilities across your entire application.

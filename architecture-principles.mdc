@@ -1,0 +1,12 @@
+---
+description: High-level code organization principles including SRP, consistency, and discoverability.
+globs: 
+alwaysApply: true
+---
+# Code Organization Principles
+
+1. **Single Responsibility**: Each file should do one thing well
+2. **Encapsulation**: Hide implementation details behind clear interfaces
+3. **Dependency Inversion**: Depend on abstractions, not concrete implementations
+4. **Consistency**: Follow the same patterns throughout the codebase
+5. **Discoverability**: Code should be easy to find and understand 

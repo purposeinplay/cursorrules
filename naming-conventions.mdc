@@ -1,0 +1,45 @@
+---
+description: Standardized naming conventions for the entire monorepo.
+globs: 
+alwaysApply: true
+---
+# Naming Conventions
+
+## File Naming
+- **Components**: Use kebab-case for files: `user-profiles.tsx`, `product-card.tsx`
+- **Utilities/Hooks**: Use kebab-case: `format-date.ts`, `use-auth.ts`
+- **Types**: Use kebab-case: `user-types.ts`, `api-types.ts`
+- **Constants**: Use kebab-case: `app-constants.ts`
+
+## Component Naming
+- **React Components**: Use PascalCase for the component name, which differs from the file name
+  ```typescript
+  // File: user-profiles.tsx
+  export function UserProfiles() { ... }
+  
+  // File: product-card.tsx
+  export function ProductCard() { ... }
+  ```
+- **Import/Export Pattern**:
+  ```typescript
+  // ✅ Good - file uses kebab-case, component uses PascalCase
+  import { UserProfiles } from '@/components/user-profiles';
+  
+  // ❌ Bad - file using PascalCase
+  import { UserProfiles } from '@/components/UserProfiles';
+  ```
+
+## Function and Variable Naming
+1. **PascalCase**: Components, type definitions, and interfaces (e.g., `UserProfile`, `AuthProvider`).
+
+2. **kebab-case**: Directory and file names (e.g., `components/auth-wizard`, `user-profile.tsx`).
+
+3. **camelCase**: Variables, functions, methods, hooks, properties, and props (e.g., `fetchData`, `handleClick`).
+
+4. **UPPER_SNAKE_CASE**: Environment variables, constants, and global configurations (e.g., `API_BASE_URL`).
+
+5. **Hooks**: Must start with `use` (e.g., `useUserData`).
+
+6. **Event Handlers**: Prefix with `handle` (e.g., `handleSubmit`).
+
+7. **Booleans**: Prefix with `is` or `has` to clearly indicate a boolean state (e.g., `isLoading`, `hasPermission`).

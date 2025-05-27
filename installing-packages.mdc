@@ -1,0 +1,325 @@
+---
+description: Standard practices for installing packages using pnpm.
+globs: 
+alwaysApply: true
+---
+# Package Management with pnpm
+
+We use `pnpm` as our package manager for its efficiency, strict dependency management, and excellent monorepo support.
+
+## Basic Installation
+
+### Adding Dependencies
+```sh
+# Add to a specific workspace
+pnpm add <package-name> --filter <workspace-name>
+
+# Add to the web app
+pnpm add react-hook-form --filter web
+
+# Add a dev dependency
+pnpm add -D @types/node --filter web
+
+# Add to root workspace
+pnpm add -w husky
+```
+
+### Installing All Dependencies
+```sh
+# Install all dependencies for all workspaces
+pnpm install
+
+# Install with frozen lockfile (CI/production)
+pnpm install --frozen-lockfile
+
+# Clean install (removes node_modules first)
+pnpm install --force
+```
+
+## Workspace Management
+
+### Working with Workspaces
+```sh
+# Run command in specific workspace
+pnpm --filter web dev
+pnpm --filter @repo/ui build
+
+# Run command in all workspaces
+pnpm -r build
+
+# Run command in all workspaces in parallel
+pnpm -r --parallel build
+
+# Add dependency from one workspace to another
+pnpm add @repo/ui --filter web
+```
+
+### Common Workspace Patterns
+```sh
+# Add shared package to web app
+pnpm add @repo/tsconfig --filter web -D
+
+# Update all instances of a package
+pnpm update react -r
+
+# Check outdated packages in all workspaces
+pnpm outdated -r
+```
+
+## Version Management
+
+### Specifying Versions
+```sh
+# Install specific version
+pnpm add react@18.2.0 --filter web
+
+# Install latest version
+pnpm add react@latest --filter web
+
+# Install with version range
+pnpm add "react@^18.0.0" --filter web
+
+# Install beta/next versions
+pnpm add react@next --filter web
+pnpm add typescript@beta -D --filter web
+```
+
+### Updating Dependencies
+```sh
+# Update a specific package
+pnpm update react --filter web
+
+# Update all dependencies (respecting ranges)
+pnpm update --filter web
+
+# Update to latest (ignoring ranges)
+pnpm update --latest --filter web
+
+# Interactive update
+pnpm update -i --filter web
+
+# Update globally for all workspaces
+pnpm update -r
+```
+
+## Package Types
+
+### Dev Dependencies
+Always install type definitions and build tools as dev dependencies:
+```sh
+# TypeScript types
+pnpm add -D @types/react @types/node --filter web
+
+# Build tools
+pnpm add -D vite @vitejs/plugin-react --filter web
+
+# Linting and formatting
+pnpm add -D eslint prettier --filter web
+
+# Testing
+pnpm add -D vitest @testing-library/react --filter web
+```
+
+### Peer Dependencies
+Handle peer dependency warnings appropriately:
+```sh
+# Check peer dependencies
+pnpm install --strict-peer-dependencies
+
+# Install peer dependencies manually when needed
+pnpm add react react-dom --filter web
+```
+
+## Common Scenarios
+
+### Setting Up a New Package
+```sh
+# Create new package directory
+mkdir packages/new-package
+cd packages/new-package
+
+# Initialize package.json
+pnpm init
+
+# Add to workspace (update root pnpm-workspace.yaml if needed)
+# Then install dependencies
+pnpm add typescript -D --filter @repo/new-package
+```
+
+### Adding UI Components
+```sh
+# Shadcn UI components (special case)
+pnpm dlx shadcn@latest add button --filter web
+
+# Regular UI libraries
+pnpm add @radix-ui/react-dialog --filter web
+```
+
+### Database and ORM
+```sh
+# Prisma setup
+pnpm add -D prisma --filter web
+pnpm add @prisma/client --filter web
+
+# Run Prisma commands
+pnpm exec prisma init --filter web
+pnpm exec prisma generate --filter web
+```
+
+### API and Backend
+```sh
+# API packages
+pnpm add zod --filter web
+pnpm add @tanstack/react-query --filter web
+
+# Server packages
+pnpm add server-only --filter web
+```
+
+## Best Practices
+
+### 1. Always Specify Workspace
+```sh
+# ✅ Good - explicit workspace
+pnpm add lodash --filter web
+
+# ❌ Bad - ambiguous in monorepo
+pnpm add lodash
+```
+
+### 2. Group Related Installations
+```sh
+# ✅ Good - install related packages together
+pnpm add react-hook-form zod @hookform/resolvers --filter web
+
+# ❌ Bad - multiple separate commands
+pnpm add react-hook-form --filter web
+pnpm add zod --filter web
+pnpm add @hookform/resolvers --filter web
+```
+
+### 3. Use Exact Versions for Critical Dependencies
+```json
+// package.json
+{
+  "dependencies": {
+    "next": "14.2.3", // Exact version for framework
+    "react": "^18.2.0", // Range for stable libraries
+    "@company/ui": "workspace:*" // Workspace protocol
+  }
+}
+```
+
+### 4. Regular Maintenance
+```sh
+# Weekly: Check for updates
+pnpm outdated -r
+
+# Monthly: Update non-critical packages
+pnpm update -r
+
+# Quarterly: Audit for vulnerabilities
+pnpm audit
+
+# Before deployment: Ensure lockfile is up to date
+pnpm install --frozen-lockfile
+```
+
+### 5. Handling Lockfile Conflicts
+```sh
+# If you encounter lockfile conflicts
+# 1. Delete the lockfile
+rm pnpm-lock.yaml
+
+# 2. Reinstall
+pnpm install
+
+# 3. Commit the new lockfile
+git add pnpm-lock.yaml
+git commit -m "chore: regenerate lockfile"
+```
+
+## Troubleshooting
+
+### Common Issues
+```sh
+# Clear pnpm cache
+pnpm store prune
+
+# Verify store integrity
+pnpm store status
+
+# Fix peer dependency issues
+pnpm install --fix-peer-dependencies
+
+# Rebuild packages
+pnpm rebuild
+
+# Clean install
+rm -rf node_modules pnpm-lock.yaml
+pnpm install
+```
+
+### Workspace Resolution Issues
+```sh
+# List all workspaces
+pnpm list -r --depth -1
+
+# Check why a package was installed
+pnpm why react --filter web
+
+# Find duplicate packages
+pnpm dedupe
+```
+
+## CI/CD Considerations
+
+### GitHub Actions
+```yaml
+- name: Install pnpm
+  uses: pnpm/action-setup@v2
+  with:
+    version: 8
+
+- name: Install dependencies
+  run: pnpm install --frozen-lockfile
+```
+
+### Docker
+```dockerfile
+# Install pnpm in Docker
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# Copy files needed for install
+COPY pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/*/package.json packages/
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile --prod
+```
+
+## Security
+
+### Audit and Fix
+```sh
+# Run security audit
+pnpm audit
+
+# Fix automatically where possible
+pnpm audit --fix
+
+# Check specific package
+pnpm audit --filter web
+```
+
+### Pre-commit Hooks
+```sh
+# Install husky for git hooks
+pnpm add -D husky -w
+
+# Add pre-commit hook to verify lockfile
+echo "pnpm install --frozen-lockfile" > .husky/pre-commit
+```
+
+```sh
+pnpm add ...

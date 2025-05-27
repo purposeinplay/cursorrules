@@ -1,0 +1,80 @@
+---
+description: Overview of reusable libraries and configurations in the packages directory.
+globs: 
+alwaysApply: true
+---
+# Reusable Packages
+
+## Purpose
+Contains reusable libraries, configurations, and utilities shared between the web and unsubscriber apps.
+
+## Key Packages
+
+### eslint-config
+ESLint configurations for consistent code linting.
+
+### loops
+Related to marketing email automation.
+
+### resend
+Integration with Resend for transactional email sending.
+
+### tinybird
+Integration with Tinybird for real-time analytics.
+
+Example:
+
+```
+tinybird/
+├── client.ts
+├── index.ts
+└── package.json
+```
+
+#### tinybird/client.ts
+```typescript
+import { Tinybird } from "@chronark/zod-bird";
+
+export const tb = new Tinybird({
+  token: process.env.TINYBIRD_TOKEN!,
+  baseUrl: process.env.TINYBIRD_BASE_URL,
+});
+```
+
+#### tinybird/index.ts
+```typescript
+export * from "./client";
+```
+
+### tinybird-ai-analytics
+Integration with Tinybird for AI usage analytics.
+
+### tsconfig
+Shared TypeScript configurations.
+
+## Example Directory Structure
+
+Here’s an example of how the directory structure for the `packages` folder might look:
+
+```
+packages/                # Reusable libraries and configurations
+├── eslint-config/       # ESLint configurations for consistent code linting
+│   ├── index.js
+│   └── package.json
+├── loops/               # Related to marketing email automation
+│   ├── index.js
+│   └── package.json
+├── resend/              # Integration with Resend for transactional email sending
+│   ├── index.js
+│   └── package.json
+├── tinybird/            # Integration with Tinybird for real-time analytics
+│   ├── client.ts       # Tinybird client setup
+│   ├── index.ts        # Exports Tinybird client
+│   └── package.json    # Package metadata
+├── tinybird-ai-analytics/ # Integration with Tinybird for AI usage analytics
+│   ├── index.js
+│   └── package.json
+└── tsconfig/            # Shared TypeScript configurations
+    ├── base.json
+    └── tsconfig.json
+```

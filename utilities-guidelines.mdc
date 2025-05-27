@@ -1,0 +1,55 @@
+---
+description: Guidelines for writing and organizing utility functions, including lodash usage.
+globs: 
+alwaysApply: true
+---
+# Utility Functions
+
+## Utility Organization
+
+### Global Utilities (`utils/` folder)
+The global `utils/` folder contains:
+- **Pure utility functions**: Reusable helpers with no side effects (e.g., formatters, parsers)
+- **Core app services**: Next.js Server Actions, API clients, authentication logic
+- **External integrations**: Gmail API, Redis, database clients
+- **Common helpers**: Date formatting, string manipulation, validation functions
+
+### Module-Specific Utilities
+Module-specific utilities should be placed within the module:
+```
+src/modules/products/
+  utils/               # Product-specific utilities
+    format-price.ts    # Only used within products module
+    validate-sku.ts    # Product validation logic
+```
+
+## Lodash Usage
+- Use lodash utilities for common operations (arrays, objects, strings)
+- Import specific lodash functions to minimize bundle size:
+  ```typescript
+  import groupBy from "lodash/groupBy";
+  import debounce from "lodash/debounce";
+  ```
+
+## Best Practices
+
+### When to Create a Utility
+Create a utility function when:
+- ✅ The logic is used in 2+ places
+- ✅ The function is pure (no side effects)
+- ✅ The logic is complex enough to warrant extraction
+- ✅ The function improves code readability
+
+### Utility Placement Guidelines
+| Utility Type | Location | Example |
+|---|---|---|
+| **Generic helpers** | `/utils/` | `formatDate()`, `parseJSON()` |
+| **Module-specific** | `/modules/[name]/utils/` | `calculateProductDiscount()` |
+| **Server actions** | `/utils/actions/` | `createUser()`, `updateProfile()` |
+| **API integrations** | `/utils/[service]/` | `/utils/gmail/`, `/utils/redis/` |
+
+### Naming Conventions
+For utility function naming, see @naming-conventions.mdc.
+
+### Import Patterns
+For importing utilities, see @import-patterns.mdc.

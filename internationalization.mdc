@@ -1,0 +1,507 @@
+---
+description: Comprehensive i18n setup using next-intl including routing, translations, and language switching.
+globs: 
+alwaysApply: true
+---
+# Internationalization (i18n)
+
+## Framework Setup
+
+### Using next-intl
+We use `next-intl` for internationalization in Next.js applications:
+
+```bash
+pnpm add next-intl
+```
+
+### Configuration
+Create the main i18n configuration:
+
+```typescript
+// src/i18n.ts
+import { notFound } from 'next/navigation';
+import { getRequestConfig } from 'next-intl/server';
+
+// Can be imported from a shared config
+const locales = ['en', 'es', 'fr', 'de'];
+
+export default getRequestConfig(async ({ locale }) => {
+  // Validate that the incoming `locale` parameter is valid
+  if (!locales.includes(locale as any)) notFound();
+
+  return {
+    messages: (await import(`../messages/${locale}.json`)).default
+  };
+});
+```
+
+### Next.js Configuration
+Update your `next.config.mjs`:
+
+```javascript
+// next.config.mjs
+import createNextIntlPlugin from 'next-intl/plugin';
+
+const withNextIntl = createNextIntlPlugin();
+
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  // Your existing config
+};
+
+export default withNextIntl(nextConfig);
+```
+
+## Routing Structure
+
+### URL Pattern
+Use the `[locale]` dynamic segment for language routing:
+
+```
+app/
+├── [locale]/
+│   ├── layout.tsx          # Root layout with locale
+│   ├── page.tsx           # Home page
+│   ├── about/
+│   │   └── page.tsx       # About page
+│   ├── products/
+│   │   ├── page.tsx       # Products listing
+│   │   └── [id]/
+│   │       └── page.tsx   # Product detail
+│   └── ...
+├── globals.css
+└── layout.tsx             # Global layout (optional)
+```
+
+### Middleware for Language Detection
+Create middleware for automatic language detection:
+
+```typescript
+// middleware.ts
+import createMiddleware from 'next-intl/middleware';
+
+export default createMiddleware({
+  // A list of all locales that are supported
+  locales: ['en', 'es', 'fr', 'de'],
+
+  // Used when no locale matches
+  defaultLocale: 'en',
+
+  // Always use locale prefix
+  localePrefix: 'always'
+});
+
+export const config = {
+  // Match only internationalized pathnames
+  matcher: ['/', '/(de|en|es|fr)/:path*']
+};
+```
+
+### Alternative Middleware with Custom Logic
+For more control over language detection:
+
+```typescript
+// middleware.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { match } from '@formatjs/intl-localematcher';
+import Negotiator from 'negotiator';
+
+const locales = ['en', 'es', 'fr', 'de'];
+const defaultLocale = 'en';
+
+function getLocale(request: NextRequest): string {
+  // Get locale from URL
+  const pathname = request.nextUrl.pathname;
+  const pathnameHasLocale = locales.some(
+    (locale) => pathname.startsWith(`/${locale}/`) || pathname === `/${locale}`
+  );
+
+  if (pathnameHasLocale) return pathname.split('/')[1];
+
+  // Get locale from Accept-Language header
+  const acceptLanguage = request.headers.get('Accept-Language');
+  if (acceptLanguage) {
+    const headers = { 'accept-language': acceptLanguage };
+    const languages = new Negotiator({ headers }).languages();
+    return match(languages, locales, defaultLocale);
+  }
+
+  return defaultLocale;
+}
+
+export function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  
+  // Check if there is any supported locale in the pathname
+  const pathnameIsMissingLocale = locales.every(
+    (locale) => !pathname.startsWith(`/${locale}/`) && pathname !== `/${locale}`
+  );
+
+  // Redirect if there is no locale
+  if (pathnameIsMissingLocale) {
+    const locale = getLocale(request);
+    return NextResponse.redirect(
+      new URL(`/${locale}${pathname}`, request.url)
+    );
+  }
+}
+
+export const config = {
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)']
+};
+```
+
+## Layout and Provider Setup
+
+### Root Layout with Locale
+```tsx
+// app/[locale]/layout.tsx
+import { NextIntlClientProvider } from 'next-intl';
+import { getMessages } from 'next-intl/server';
+import { notFound } from 'next/navigation';
+
+const locales = ['en', 'es', 'fr', 'de'];
+
+export default async function LocaleLayout({
+  children,
+  params: { locale }
+}: {
+  children: React.ReactNode;
+  params: { locale: string };
+}) {
+  // Validate that the incoming `locale` parameter is valid
+  if (!locales.includes(locale)) notFound();
+
+  // Providing all messages to the client side is the easiest way to get started
+  const messages = await getMessages();
+
+  return (
+    <html lang={locale}>
+      <body>
+        <NextIntlClientProvider messages={messages}>
+          {children}
+        </NextIntlClientProvider>
+      </body>
+    </html>
+  );
+}
+
+export function generateStaticParams() {
+  return locales.map((locale) => ({ locale }));
+}
+```
+
+## Translation Files
+
+### Message Structure
+Organize translations in JSON files:
+
+```json
+// messages/en.json
+{
+  "common": {
+    "loading": "Loading...",
+    "error": "Something went wrong",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "edit": "Edit"
+  },
+  "navigation": {
+    "home": "Home",
+    "about": "About",
+    "products": "Products",
+    "contact": "Contact"
+  },
+  "auth": {
+    "signIn": "Sign In",
+    "signOut": "Sign Out",
+    "signUp": "Sign Up",
+    "email": "Email",
+    "password": "Password",
+    "forgotPassword": "Forgot Password?"
+  },
+  "products": {
+    "title": "Our Products",
+    "description": "Discover our amazing products",
+    "addToCart": "Add to Cart",
+    "outOfStock": "Out of Stock",
+    "price": "Price: {price}",
+    "itemsCount": "You have {count, plural, =0 {no items} =1 {one item} other {# items}} in your cart"
+  }
+}
+```
+
+```json
+// messages/es.json
+{
+  "common": {
+    "loading": "Cargando...",
+    "error": "Algo salió mal",
+    "save": "Guardar",
+    "cancel": "Cancelar",
+    "delete": "Eliminar",
+    "edit": "Editar"
+  },
+  "navigation": {
+    "home": "Inicio",
+    "about": "Acerca de",
+    "products": "Productos",
+    "contact": "Contacto"
+  },
+  "auth": {
+    "signIn": "Iniciar Sesión",
+    "signOut": "Cerrar Sesión",
+    "signUp": "Registrarse",
+    "email": "Correo Electrónico",
+    "password": "Contraseña",
+    "forgotPassword": "¿Olvidaste tu contraseña?"
+  },
+  "products": {
+    "title": "Nuestros Productos",
+    "description": "Descubre nuestros increíbles productos",
+    "addToCart": "Agregar al Carrito",
+    "outOfStock": "Agotado",
+    "price": "Precio: {price}",
+    "itemsCount": "Tienes {count, plural, =0 {ningún artículo} =1 {un artículo} other {# artículos}} en tu carrito"
+  }
+}
+```
+
+## Using Translations in Components
+
+### Server Components
+```tsx
+// app/[locale]/products/page.tsx
+import { useTranslations } from 'next-intl';
+import { getTranslations } from 'next-intl/server';
+
+export default function ProductsPage() {
+  const t = useTranslations('products');
+
+  return (
+    <div>
+      <h1>{t('title')}</h1>
+      <p>{t('description')}</p>
+    </div>
+  );
+}
+
+// For metadata
+export async function generateMetadata({ params: { locale } }: { params: { locale: string } }) {
+  const t = await getTranslations({ locale, namespace: 'products' });
+
+  return {
+    title: t('title'),
+    description: t('description')
+  };
+}
+```
+
+### Client Components
+```tsx
+// components/product-card.tsx
+'use client';
+
+import { useTranslations } from 'next-intl';
+
+interface ProductCardProps {
+  product: {
+    id: string;
+    name: string;
+    price: number;
+    inStock: boolean;
+  };
+}
+
+export default function ProductCard({ product }: ProductCardProps) {
+  const t = useTranslations('products');
+
+  return (
+    <div className="border rounded-lg p-4">
+      <h3>{product.name}</h3>
+      <p>{t('price', { price: product.price })}</p>
+      <button 
+        disabled={!product.inStock}
+        className="mt-2 px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-300"
+      >
+        {product.inStock ? t('addToCart') : t('outOfStock')}
+      </button>
+    </div>
+  );
+}
+```
+
+### Navigation with Locale
+```tsx
+// components/navigation.tsx
+'use client';
+
+import Link from 'next/link';
+import { useTranslations, useLocale } from 'next-intl';
+
+export default function Navigation() {
+  const t = useTranslations('navigation');
+  const locale = useLocale();
+
+  return (
+    <nav className="flex space-x-4">
+      <Link href={`/${locale}`}>{t('home')}</Link>
+      <Link href={`/${locale}/about`}>{t('about')}</Link>
+      <Link href={`/${locale}/products`}>{t('products')}</Link>
+      <Link href={`/${locale}/contact`}>{t('contact')}</Link>
+    </nav>
+  );
+}
+```
+
+## Advanced Features
+
+### Language Switcher
+```tsx
+// components/language-switcher.tsx
+'use client';
+
+import { useRouter, usePathname } from 'next/navigation';
+import { useLocale } from 'next-intl';
+
+const languages = [
+  { code: 'en', name: 'English' },
+  { code: 'es', name: 'Español' },
+  { code: 'fr', name: 'Français' },
+  { code: 'de', name: 'Deutsch' }
+];
+
+export default function LanguageSwitcher() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const locale = useLocale();
+
+  const switchLanguage = (newLocale: string) => {
+    // Replace the locale in the current pathname
+    const newPathname = pathname.replace(`/${locale}`, `/${newLocale}`);
+    router.push(newPathname);
+  };
+
+  return (
+    <select 
+      value={locale} 
+      onChange={(e) => switchLanguage(e.target.value)}
+      className="border rounded px-2 py-1"
+    >
+      {languages.map((lang) => (
+        <option key={lang.code} value={lang.code}>
+          {lang.name}
+        </option>
+      ))}
+    </select>
+  );
+}
+```
+
+### Pluralization
+```tsx
+// Using pluralization in components
+const t = useTranslations('products');
+
+// In your translation file:
+// "itemsCount": "You have {count, plural, =0 {no items} =1 {one item} other {# items}} in your cart"
+
+<p>{t('itemsCount', { count: cartItems.length })}</p>
+```
+
+### Rich Text and Formatting
+```tsx
+// components/formatted-message.tsx
+import { useTranslations } from 'next-intl';
+
+export default function FormattedMessage() {
+  const t = useTranslations('common');
+
+  return (
+    <p>
+      {t.rich('welcomeMessage', {
+        strong: (chunks) => <strong>{chunks}</strong>,
+        link: (chunks) => <a href="/about" className="text-blue-500">{chunks}</a>
+      })}
+    </p>
+  );
+}
+
+// In translation file:
+// "welcomeMessage": "Welcome to our <strong>amazing</strong> platform! <link>Learn more</link>"
+```
+
+## Best Practices
+
+### Translation Key Organization
+- ✅ Use nested keys for logical grouping
+- ✅ Use descriptive key names
+- ✅ Keep keys consistent across languages
+- ✅ Use namespaces for different sections
+
+```json
+{
+  "auth": {
+    "form": {
+      "email": "Email",
+      "password": "Password",
+      "submit": "Sign In"
+    },
+    "errors": {
+      "invalidCredentials": "Invalid email or password",
+      "networkError": "Network error occurred"
+    }
+  }
+}
+```
+
+### Component Patterns
+- ✅ Use `useTranslations` hook in components
+- ✅ Pass translation namespace to hook
+- ✅ Extract reusable translation logic into custom hooks
+- ✅ Use `getTranslations` for server-side metadata
+
+### URL Structure
+- ✅ Always include locale in URLs: `/en/products`
+- ✅ Use consistent locale codes (ISO 639-1)
+- ✅ Handle locale detection gracefully
+- ✅ Provide fallback to default locale
+
+### Performance
+- ✅ Load only necessary translations per page
+- ✅ Use static generation for better performance
+- ✅ Consider lazy loading for large translation files
+- ✅ Cache translations appropriately
+
+### Development Workflow
+- ✅ Keep translation files in sync across locales
+- ✅ Use TypeScript for translation key validation
+- ✅ Implement translation key extraction tools
+- ✅ Test with different locales during development
+
+## TypeScript Integration
+
+### Type-Safe Translations
+```typescript
+// types/translations.ts
+import en from '../messages/en.json';
+
+type Messages = typeof en;
+
+declare global {
+  interface IntlMessages extends Messages {}
+}
+```
+
+### Custom Hook for Type Safety
+```typescript
+// hooks/use-typed-translations.ts
+import { useTranslations } from 'next-intl';
+
+export function useTypedTranslations<T extends keyof IntlMessages>(namespace: T) {
+  return useTranslations(namespace);
+}
+```
+
+This comprehensive i18n setup ensures proper internationalization with type safety, performance optimization, and maintainable translation management.

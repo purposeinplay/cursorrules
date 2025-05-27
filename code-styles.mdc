@@ -1,0 +1,251 @@
+---
+description: Code style guidelines including TypeScript, Tailwind, and Prettier usage.
+globs: 
+alwaysApply: true
+---
+# Code Style Guidelines
+
+## General
+- Use TypeScript with strict null checks enabled.
+- Use path aliases (e.g., `@/`) for imports from the project root (see @import-patterns.mdc for details).
+
+## Project Structure
+- Follow the Next.js App Router structure with the `(app)` directory.
+- Consult @project-structure.mdc for detailed structure guidelines.
+
+## Styling
+- Use Tailwind CSS for styling.
+- Follow Tailwind patterns with `prettier-plugin-tailwindcss` for consistent class ordering.
+- For comprehensive UI component patterns and `cn()` utility usage, see @ui-components.mdc.
+
+## Components
+- Prefer functional components with React hooks.
+- Use proper error handling with `try/catch` blocks.
+- For error handling patterns and error boundaries, see @errors.mdc.
+
+## Formatting
+- Format code with Prettier.
+
+## Code Quality
+
+### Linting & Formatting
+
+#### ESLint Configuration
+Use ESLint with Next.js configuration for consistent code quality:
+
+```json
+// .eslintrc.json
+{
+  "extends": [
+    "next/core-web-vitals",
+    "@next/eslint-config-next",
+    "prettier"
+  ],
+  "rules": {
+    "@typescript-eslint/no-unused-vars": "error",
+    "@typescript-eslint/no-explicit-any": "warn",
+    "prefer-const": "error",
+    "no-var": "error"
+  },
+  "parser": "@typescript-eslint/parser",
+  "plugins": ["@typescript-eslint"]
+}
+```
+
+#### Prettier Configuration
+Configure Prettier with Tailwind plugin for consistent formatting:
+
+```json
+// .prettierrc
+{
+  "semi": true,
+  "trailingComma": "es5",
+  "singleQuote": true,
+  "tabWidth": 2,
+  "useTabs": false,
+  "plugins": ["prettier-plugin-tailwindcss"]
+}
+```
+
+#### Husky for Pre-commit Hooks
+Set up Husky to run quality checks before commits:
+
+```bash
+# Install Husky
+pnpm add -D husky
+
+# Initialize Husky
+npx husky install
+
+# Add pre-commit hook
+npx husky add .husky/pre-commit "pnpm lint-staged"
+```
+
+```json
+// package.json
+{
+  "scripts": {
+    "prepare": "husky install"
+  }
+}
+```
+
+#### Lint-staged for Staged Files
+Configure lint-staged to run checks only on staged files:
+
+```json
+// package.json
+{
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,mdx}": [
+      "prettier --write"
+    ]
+  }
+}
+```
+
+### Package Scripts
+Add these scripts to your `package.json`:
+
+```json
+{
+  "scripts": {
+    "lint": "next lint",
+    "lint:fix": "next lint --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "type-check": "tsc --noEmit"
+  }
+}
+```
+
+### Dependencies Management
+
+For comprehensive package installation and management guidelines, see @installing-packages.mdc.
+
+#### Keep Dependencies Up to Date
+- Regularly update dependencies to get security patches and new features
+- Use tools like `npm-check-updates` or `pnpm update` to check for updates
+- Test thoroughly after major version updates
+
+```bash
+# Check for outdated packages
+pnpm outdated
+
+# Update all dependencies
+pnpm update
+
+# Update specific package
+pnpm add package-name@latest
+```
+
+#### Version Management
+- **Use exact versions** for critical packages that could break functionality
+- **Use caret ranges** (`^`) for most dependencies to get patch updates
+- **Pin major versions** for packages with frequent breaking changes
+
+```json
+// package.json
+{
+  "dependencies": {
+    "next": "14.0.0",              // Exact version for framework
+    "react": "^18.2.0",            // Caret for stable libraries
+    "@types/node": "~20.5.0"       // Tilde for types
+  }
+}
+```
+
+#### Library Selection
+- **Prefer established libraries** over custom solutions when possible
+- **Check maintenance status**: Recent commits, active issues, community size
+- **Consider bundle size** impact on application performance
+- **Evaluate TypeScript support** and type definitions quality
+
+#### Security Audits
+Run regular security audits to identify vulnerabilities:
+
+```bash
+# Check for security vulnerabilities
+pnpm audit
+
+# Fix automatically fixable vulnerabilities
+pnpm audit --fix
+
+# Generate detailed security report
+pnpm audit --audit-level moderate
+```
+
+### Code Quality Checks
+
+#### Pre-commit Checklist
+Before committing code, ensure:
+- ✅ ESLint passes without errors
+- ✅ Prettier formatting is applied
+- ✅ TypeScript compilation succeeds
+- ✅ Tests pass (if applicable)
+- ✅ No console.log statements in production code
+
+#### CI/CD Integration
+Include quality checks in your CI/CD pipeline:
+
+```yaml
+# .github/workflows/quality.yml
+name: Code Quality
+on: [push, pull_request]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - run: pnpm install
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm type-check
+      - run: pnpm test
+```
+
+### Best Practices
+
+#### Code Organization
+- **Consistent naming**: Follow established naming conventions (see @naming-conventions.mdc)
+- **Clear imports**: Group and order imports logically (see @import-patterns.mdc)
+- **Type safety**: Leverage TypeScript for better code quality
+- **Error handling**: Implement proper error boundaries and try-catch blocks (see @errors.mdc)
+
+#### Performance Considerations
+- **Bundle analysis**: Regularly check bundle size with `@next/bundle-analyzer`
+- **Code splitting**: Use dynamic imports for large components
+- **Tree shaking**: Ensure unused code is eliminated
+- **Dependency optimization**: Remove unused dependencies
+
+#### Documentation
+- **Code comments**: Explain complex business logic
+- **Type definitions**: Use descriptive interface and type names
+- **README updates**: Keep documentation current with code changes
+- **API documentation**: Document public interfaces and functions
+
+# Component Organization
+
+## Component Mapping
+Use object maps instead of switch statements:
+```tsx
+// Prefer
+const COMPONENT_MAP = {
+  dashboard: () => <DashboardView />,
+  'user-profile': () => <UserProfileView />
+};
+
+// Over
+switch(name) {
+  case 'dashboard': return <DashboardView />;
+  case 'user-profile': return <UserProfileView />;
+}
+```
